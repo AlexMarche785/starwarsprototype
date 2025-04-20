@@ -1,0 +1,550 @@
+
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Space Fighter Sim - Varied TIEs</title> {/* Updated Title */}
+    <style>
+        body { margin: 0; overflow: hidden; background-color: #000000; }
+        canvas { display: block; }
+        #info {
+            position: absolute;
+            top: 50px; /* Lowered further */
+            left: 10px;
+            color: white; font-family: sans-serif; background: rgba(0,0,0,0.5);
+            padding: 5px; border-radius: 3px; font-size: 12px; z-index: 1;
+        }
+        /* HP Gauge Styling */
+        #hp-gauge-container {
+            position: absolute;
+            top: 10px;
+            left: 10px;
+            width: 150px; /* Width of the bar container */
+            height: 20px; /* Height of the bar */
+            background-color: rgba(50, 50, 50, 0.7); /* Dark background */
+            border: 1px solid #777;
+            border-radius: 4px;
+            overflow: hidden; /* Keep inner bar contained */
+            z-index: 1;
+            display: flex; /* Align text */
+            align-items: center;
+        }
+        #hp-gauge-bar {
+            width: 100%; /* Start full */
+            height: 100%;
+            background-color: #00ff00; /* Start green */
+            transition: width 0.2s ease-out, background-color 0.2s ease-out; /* Smooth transitions */
+        }
+         #hp-gauge-text {
+            position: absolute; /* Overlay text on the bar */
+            left: 5px;
+            right: 5px;
+            top: 1px; /* Fine-tune vertical alignment */
+            color: black;
+            font-family: monospace;
+            font-size: 12px;
+            font-weight: bold;
+            text-shadow: 1px 1px 1px rgba(255,255,255,0.5); /* Make text more readable */
+            pointer-events: none; /* Allow clicks through text */
+        }
+
+        #game-over-display {
+             position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+             color: yellow; font-family: sans-serif; font-size: 32px; font-weight: bold;
+             text-align: center; background: rgba(0,0,0,0.7); padding: 20px; border-radius: 10px;
+             display: none; z-index: 20;
+        }
+
+        /* --- UI Controls --- */
+        .touch-control { position: absolute; bottom: 20px; opacity: 0.6; user-select: none; -webkit-user-select: none; touch-action: none; z-index: 10; }
+        #joystick-base { left: 20px; width: 120px; height: 120px; background-color: #444; border-radius: 50%; border: 2px solid #222; }
+        #joystick-handle { position: absolute; width: 60px; height: 60px; background-color: #888; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
+        #fire-button { right: 20px; width: 80px; height: 80px; background-color: #c00; border-radius: 50%; border: 2px solid #800; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 16px; }
+        #fire-button:active { background-color: #800; }
+        #warp-button { right: 115px; width: 70px; height: 70px; background-color: #0077cc; border-radius: 50%; border: 2px solid #004488; display: flex; justify-content: center; align-items: center; color: white; font-weight: bold; font-size: 14px; transition: background-color 0.1s ease; /* Smooth toggle color */ }
+        #warp-button.active { background-color: #004488; border-color: #002244; } /* 'active' class now controls pressed state */
+    </style>
+    <script type="importmap">
+        { "imports": { "three": "https://unpkg.com/three@0.160.0/build/three.module.js" } }
+    </script>
+</head>
+<body>
+    <!-- HP Gauge Bar Structure -->
+    <div id="hp-gauge-container">
+        <div id="hp-gauge-bar"></div>
+        <span id="hp-gauge-text">HP: 100</span>
+    </div>
+    <div id="info">Joystick: Pitch/Yaw (Inv) | Fire | Warp Toggle</div>
+    <canvas id="gameCanvas"></canvas>
+    <div id="game-over-display"></div>
+
+    <!-- UI Controls -->
+    <div id="joystick-base" class="touch-control"><div id="joystick-handle"></div></div>
+    <div id="fire-button" class="touch-control">FIRE</div>
+    <div id="warp-button" class="touch-control">WARP</div>
+
+    <script type="module">
+        import * as THREE from 'three';
+
+        let scene, camera, renderer;
+        let aircraft, stars, starDestroyer;
+        let clock = new THREE.Clock();
+
+        // --- Constants ---
+        const SPACE_EXTENT = 3000; const NUM_ASTEROIDS = 150; const PLAYER_FIRE_RATE = 0.15;
+        const PLAYER_BULLET_SPEED = 300; const PLAYER_BULLET_LIFETIME = 5;
+        const ENEMY_BULLET_SPEED = 250;
+        const ENEMY_BULLET_LIFETIME = 6; const ENEMY_CANNON_RANGE = 800; const ENEMY_CANNON_FIRE_RATE = 1.5;
+        const ENEMY_HIT_CHANCE = 0.05; // Destroyer Cannons
+        const WING_ANGLE_DEG = 22.5; const NORMAL_THRUST = 80;
+        const WARP_THRUST = 500; const NORMAL_FOV = 75; const WARP_FOV = 110; const FOV_LERP_FACTOR = 0.05;
+        const DESTROYER_WIN_HITS = 1000;
+        const DESTROYER_CANNON_HP = 5; const MAX_YAW_SPEED = Math.PI * 0.6;
+        const PLAYER_MAX_HP = 100;
+
+        // --- TIE Fighter Constants ---
+        const NUM_TIE_FIGHTERS = 10;
+        const TIE_FIGHTER_HP = 3;
+        const TIE_FIGHTER_BASE_SPEED = 45; // <<< REDUCED Base Speed
+        const TIE_FIGHTER_SPEED_VARIATION = 15; // <<< NEW Speed Variation (e.g., 45 +/- 15)
+        const TIE_TURN_RATE = Math.PI * 0.6;
+        const TIE_PATROL_RADIUS = 400;
+        const DESTROYER_DEFENSE_RADIUS = 600;
+        const TIE_FIRE_RATE = 1.2;
+        const TIE_CANNON_RANGE = 600;
+        const TIE_BULLET_SPEED = 280;
+        const TIE_AIM_TOLERANCE = 0.95;
+        const TIE_HIT_CHANCE = 1.0;      // <<< CHANGED Hit chance to 100%
+        const TIE_SEPARATION_DISTANCE = 30;
+        const TIE_SEPARATION_FORCE = 0.2;
+
+        // --- Explosion Constants ---
+        const EXPLOSION_DURATION = 0.6; // Seconds
+        const EXPLOSION_MAX_SCALE = 20; // Final size multiplier
+        const EXPLOSION_INITIAL_SCALE = 0.5; // Starting size multiplier
+
+        // --- Game State ---
+        let gameState = 'playing';
+        const playerState = { hp: PLAYER_MAX_HP };
+        const aircraftState = {
+            position: new THREE.Vector3(0, 0, -1500), velocity: new THREE.Vector3(0, 0, 0), rotation: new THREE.Euler(0, 0, 0, 'YXZ'),
+            pitchSpeed: 0, rollSpeed: 0, yawSpeed: 0, dragCoefficient: 0.0005, maxRollSpeed: Math.PI * 0.8, maxPitchSpeed: Math.PI * 0.8, maxYawSpeed: MAX_YAW_SPEED,
+            controlSensitivity: 0.025, controlDamping: 0.90, isWarping: false
+        };
+        const uiState = {
+            joystickActive: false, joystickIdentifier: null, joystickBaseRect: null, joystickMaxDist: 0,
+            fireButtonPressed: false, fireButtonIdentifier: null
+        };
+        let joystickHandleElement, joystickBaseElement, fireButtonElement, warpButtonElement,
+            hpGaugeContainerElement, hpGaugeBarElement, hpGaugeTextElement,
+            gameOverDisplayElement;
+        let spaceObjects = [];
+        let playerBullets = []; let enemyBullets = [];
+        let activeExplosions = []; // <<< NEW List for active explosions
+        let timeSinceLastShot = 0; let fireRequested = false;
+        const playerBoundingSphere = new THREE.Sphere(new THREE.Vector3(), 3);
+
+        // --- Shared Explosion Geometry & Material ---
+        const explosionGeometry = new THREE.SphereGeometry(1, 16, 12); // Base radius 1
+        const explosionMaterial = new THREE.MeshBasicMaterial({
+            color: 0xffaa33, // Orange/Yellow
+            transparent: true,
+            opacity: 1.0,
+            // blending: THREE.AdditiveBlending // Optional: Looks brighter, less realistic depth
+        });
+
+        init();
+        animate();
+
+        function init() {
+            scene = new THREE.Scene(); scene.background = new THREE.Color(0x000000);
+            camera = new THREE.PerspectiveCamera(NORMAL_FOV, window.innerWidth / window.innerHeight, 0.1, SPACE_EXTENT * 2);
+            renderer = new THREE.WebGLRenderer({ canvas: document.getElementById('gameCanvas'), antialias: true });
+            renderer.setSize(window.innerWidth, window.innerHeight); renderer.setPixelRatio(window.devicePixelRatio);
+            const ambientLight = new THREE.AmbientLight(0x505050, 2); scene.add(ambientLight); const dirLight = new THREE.DirectionalLight(0xffffff, 1.5); dirLight.position.set(100, 50, -200); scene.add(dirLight);
+            createStarfield();
+            aircraft = createXWing(); aircraft.position.copy(aircraftState.position); aircraft.rotation.copy(aircraftState.rotation); scene.add(aircraft);
+            starDestroyer = createStarDestroyer(); spaceObjects.push(starDestroyer); scene.add(starDestroyer);
+            spawnTIEFighters(NUM_TIE_FIGHTERS, starDestroyer.position, TIE_PATROL_RADIUS * 1.5);
+            populateSpace();
+
+            // Get UI elements
+            joystickHandleElement=document.getElementById('joystick-handle'); joystickBaseElement=document.getElementById('joystick-base'); fireButtonElement=document.getElementById('fire-button'); warpButtonElement=document.getElementById('warp-button');
+            hpGaugeContainerElement = document.getElementById('hp-gauge-container'); hpGaugeBarElement = document.getElementById('hp-gauge-bar'); hpGaugeTextElement = document.getElementById('hp-gauge-text');
+            gameOverDisplayElement = document.getElementById('game-over-display');
+            updateHPDisplay();
+            setupEventListeners();
+        }
+
+        function createStarfield() { /* ... No Changes ... */
+             const starGeometry = new THREE.BufferGeometry(); const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: true }); const starVertices = [];
+            for (let i = 0; i < 15000; i++) { const x = (Math.random() - 0.5) * SPACE_EXTENT * 2; const y = (Math.random() - 0.5) * SPACE_EXTENT * 2; const z = (Math.random() - 0.5) * SPACE_EXTENT * 2; if (Math.abs(x) < 200 && Math.abs(y) < 200 && Math.abs(z) < 200) continue; starVertices.push(x, y, z); }
+            starGeometry.setAttribute('position', new THREE.Float32BufferAttribute(starVertices, 3)); stars = new THREE.Points(starGeometry, starMaterial); scene.add(stars);
+        }
+        function createXWing() { /* ... No Changes ... */
+             const aircraftGroup = new THREE.Group(); const greyMat = new THREE.MeshStandardMaterial({ color: 0xAAAAAA, roughness: 0.6, metalness: 0.3 }); const darkGreyMat = new THREE.MeshStandardMaterial({ color: 0x555555, roughness: 0.7, metalness: 0.2 }); const redMat = new THREE.MeshStandardMaterial({ color: 0xAA0000 }); const fuselageGeo = new THREE.CylinderGeometry(0.5, 0.8, 10, 8); const fuselage = new THREE.Mesh(fuselageGeo, greyMat); fuselage.rotation.x = Math.PI / 2; const fuselageRadiusAtCenter = 0.65; aircraftGroup.add(fuselage); const cockpitGeo = new THREE.SphereGeometry(0.8, 8, 6); const cockpit = new THREE.Mesh(cockpitGeo, darkGreyMat); cockpit.position.set(0, 0.6, -3.5); cockpit.scale.z = 1.5; aircraftGroup.add(cockpit); const engineRadius = 0.3; const engineLength = 2; const engineGeo = new THREE.CylinderGeometry(0.4, engineRadius, engineLength, 8); const enginePositions = [ { x: 1.2, y: 0.5, z: 4.5 }, { x: -1.2, y: 0.5, z: 4.5 }, { x: 1.2, y: -0.5, z: 4.5 }, { x: -1.2, y: -0.5, z: 4.5 } ]; aircraftGroup.userData.engineFlames = []; const flameMat = new THREE.MeshBasicMaterial({ color: 0xff6600, transparent: true, opacity: 0.8, side: THREE.DoubleSide }); enginePositions.forEach(pos => { const engine = new THREE.Mesh(engineGeo, darkGreyMat); engine.position.set(pos.x, pos.y, pos.z); engine.rotation.x = Math.PI / 2; aircraftGroup.add(engine); const flameLength = 2.5; const flameGeo = new THREE.ConeGeometry(engineRadius * 0.8, flameLength, 8); const flameMesh = new THREE.Mesh(flameGeo, flameMat); flameMesh.position.set(pos.x, pos.y, pos.z + engineLength / 2 + flameLength / 2); flameMesh.rotation.x = Math.PI / 2; flameMesh.visible = false; aircraftGroup.add(flameMesh); aircraftGroup.userData.engineFlames.push(flameMesh); }); const wingWidth = 6; const wingThickness = 0.2; const wingDepth = 2.5; const wingGeo = new THREE.BoxGeometry(wingWidth, wingThickness, wingDepth); const wingAngleRad = THREE.MathUtils.degToRad(WING_ANGLE_DEG); const wingAttachRadius = fuselageRadiusAtCenter * 1.1; const wingYPosition = 0.1; const wingData = [ { attachX: wingAttachRadius, attachY: wingYPosition, side: 1, vertical: 1, ry: -0.1 }, { attachX: -wingAttachRadius, attachY: wingYPosition, side: -1, vertical: 1, ry: 0.1 }, { attachX: wingAttachRadius, attachY: -wingYPosition, side: 1, vertical: -1, ry: -0.1 }, { attachX: -wingAttachRadius, attachY: -wingYPosition, side: -1, vertical: -1, ry: 0.1 } ]; aircraftGroup.userData.cannonOffsets = []; wingData.forEach(data => { const wingPivotGroup = new THREE.Group(); wingPivotGroup.position.set(data.attachX, data.attachY, 0); const wingMesh = new THREE.Mesh(wingGeo, greyMat); wingMesh.position.x = (wingWidth / 2) * data.side; wingPivotGroup.add(wingMesh); const wingZRotation = wingAngleRad * data.vertical; wingPivotGroup.rotation.set(0, data.ry, wingZRotation); aircraftGroup.add(wingPivotGroup); const cannonLocalOffset = new THREE.Vector3(wingWidth * data.side, 0, -0.2); cannonLocalOffset.applyEuler(wingPivotGroup.rotation); const cannonFinalPosition = wingPivotGroup.position.clone().add(cannonLocalOffset); aircraftGroup.userData.cannonOffsets.push(cannonFinalPosition); const markGeo = new THREE.BoxGeometry(1, wingThickness + 0.05, 0.5); const markMesh = new THREE.Mesh(markGeo, redMat); const markLocalPos = new THREE.Vector3((wingWidth * 0.8) * data.side, 0, 0); markMesh.position.copy(markLocalPos); wingPivotGroup.add(markMesh); }); aircraftGroup.scale.set(0.8, 0.8, 0.8); aircraftGroup.userData.boundingSphere = playerBoundingSphere; return aircraftGroup;
+        }
+        function createStarDestroyer() { /* ... No Changes ... */
+            const destroyerGroup = new THREE.Group(); destroyerGroup.position.set(0, 100, 1800); const length = 700; const width = 350; const height = 90; const hullMaterial = new THREE.MeshStandardMaterial({ color: 0x666677, roughness: 0.7, metalness: 0.2 }); const detailMaterial = new THREE.MeshStandardMaterial({ color: 0x555566, roughness: 0.8 }); const shape = new THREE.Shape(); shape.moveTo(0, -width / 2); shape.lineTo(length, 0); shape.lineTo(0, width / 2); shape.closePath(); const extrudeSettings = { steps: 1, depth: height, bevelEnabled: false }; const geometry = new THREE.ExtrudeGeometry(shape, extrudeSettings); geometry.center(); geometry.rotateX(-Math.PI / 2); const hull = new THREE.Mesh(geometry, hullMaterial); destroyerGroup.add(hull); const bridgeWidth = 50; const bridgeHeight = 40; const bridgeDepth = 65; const bridgeGeo = new THREE.BoxGeometry(bridgeWidth, bridgeHeight, bridgeDepth); const bridge = new THREE.Mesh(bridgeGeo, detailMaterial); bridge.position.set(length * 0.1, height / 2 + bridgeHeight / 2, 0); destroyerGroup.add(bridge); const numGreebles = 100; const greebleBaseSize = 5; for (let i = 0; i < numGreebles; i++) { const greebleSize = greebleBaseSize * (Math.random() * 0.5 + 0.75); const greebleHeight = greebleSize * (Math.random() * 1.5 + 0.5); const greebleGeo = new THREE.BoxGeometry(greebleSize, greebleHeight , greebleSize); const greeble = new THREE.Mesh(greebleGeo, detailMaterial); const side = Math.random() < 0.5 ? 1 : -1; const surfaceY = side * (height / 2 + greebleHeight / 2); const randX = (Math.random() * 0.9 + 0.05) * length; const maxZ = (width / 2) * (1 - randX / length) * 0.9; const randZ = (Math.random() - 0.5) * 2 * maxZ; greeble.position.set(randX - (length/2), surfaceY, randZ); greeble.rotation.y = Math.random() * Math.PI; destroyerGroup.add(greeble); } destroyerGroup.userData = { type: 'destroyer', isDestructible: true, destroyerHits: 0, cannons: [], boundingBox: new THREE.Box3() }; const cannonPositions = [ { x: length*0.4, y: height/2, z: width*0.1 },{ x: length*0.4, y: height/2, z: -width*0.1 },{ x: length*0.6, y: height/2, z: width*0.2 },{ x: length*0.6, y: height/2, z: -width*0.2 },{ x: length*0.8, y: height/2, z: width*0.1 },{ x: length*0.8, y: height/2, z: -width*0.1 },{ x: length*0.2, y: height/2, z: width*0.15 },{ x: length*0.2, y: height/2, z: -width*0.15 },{ x: length*0.5, y: height/2, z: 0 },{ x: length*0.7, y: height/2, z: 0 },{ x: length*0.4, y: -height/2, z: width*0.1 },{ x: length*0.4, y: -height/2, z: -width*0.1 },{ x: length*0.6, y: -height/2, z: width*0.2 },{ x: length*0.6, y: -height/2, z: -width*0.2 },{ x: length*0.8, y: -height/2, z: width*0.1 },{ x: length*0.8, y: -height/2, z: -width*0.1 },{ x: length*0.2, y: -height/2, z: width*0.15 },{ x: length*0.2, y: -height/2, z: -width*0.15 },{ x: length*0.5, y: -height/2, z: 0 },{ x: length*0.7, y: -height/2, z: 0 } ]; cannonPositions.forEach((pos, index) => { const adjustedX = pos.x - (length/2); const cannon = createDestroyerCannon(destroyerGroup); const surfaceOffset = (pos.y > 0 ? 2 : -2); cannon.position.set(adjustedX, pos.y + surfaceOffset , pos.z); const aimTarget = destroyerGroup.position.clone().add(new THREE.Vector3(adjustedX * 1.1, pos.y, pos.z * 1.1)); cannon.lookAt(aimTarget); destroyerGroup.add(cannon); destroyerGroup.userData.cannons.push(cannon); }); destroyerGroup.updateMatrixWorld(true); destroyerGroup.userData.boundingBox.setFromObject(destroyerGroup, true); console.log("Destroyer BB:", destroyerGroup.userData.boundingBox.getSize(new THREE.Vector3())); return destroyerGroup;
+        }
+        function createDestroyerCannon(parentDestroyer) { /* ... No Changes ... */
+            const cannonLength = 12; const cannonRadius = 2.5; const geo = new THREE.CylinderGeometry(cannonRadius, cannonRadius * 0.8, cannonLength, 8); const mat = new THREE.MeshStandardMaterial({ color: 0x444455, roughness: 0.6 }); const cannon = new THREE.Mesh(geo, mat); cannon.geometry.rotateX(Math.PI / 2); cannon.userData = { type: 'destroyerCannon', isDestructible: true, hp: DESTROYER_CANNON_HP, fireRate: ENEMY_CANNON_FIRE_RATE + (Math.random() - 0.5) * 0.5, lastShotTime: 0, range: ENEMY_CANNON_RANGE, accuracy: ENEMY_HIT_CHANCE, parentDestroyer: parentDestroyer, boundingBox: new THREE.Box3().setFromObject(cannon) }; return cannon;
+        }
+
+        // ===========================================================
+        // UPDATED TIE Fighter Creation - Added Unique Speed
+        // ===========================================================
+        function createTIEFighter() {
+            const tieGroup = new THREE.Group(); const darkMat = new THREE.MeshStandardMaterial({ color: 0x333333, roughness: 0.8, metalness: 0.1 }); const greyMat = new THREE.MeshStandardMaterial({ color: 0x777777, roughness: 0.6 }); const cockpitRadius = 1.5; const cockpitGeo = new THREE.SphereGeometry(cockpitRadius, 12, 8); const cockpit = new THREE.Mesh(cockpitGeo, greyMat); tieGroup.add(cockpit); const pylonLength = 2.5; const pylonRadius = 0.3; const pylonGeo = new THREE.CylinderGeometry(pylonRadius, pylonRadius, pylonLength, 6); const pylonMat = greyMat; const pylonLeft = new THREE.Mesh(pylonGeo, pylonMat); const pylonRight = new THREE.Mesh(pylonGeo, pylonMat); pylonLeft.rotation.z = Math.PI / 2; pylonRight.rotation.z = Math.PI / 2; pylonLeft.position.x = -(cockpitRadius + pylonLength / 2); pylonRight.position.x = cockpitRadius + pylonLength / 2; tieGroup.add(pylonLeft); tieGroup.add(pylonRight); const wingSize = 5; const wingThickness = 0.3; const wingShape = new THREE.Shape(); for (let i = 0; i < 6; i++) { const angle = (Math.PI / 3) * i; const x = Math.cos(angle) * wingSize; const y = Math.sin(angle) * wingSize; if (i === 0) wingShape.moveTo(x, y); else wingShape.lineTo(x, y); } wingShape.closePath(); const wingExtrudeSettings = { steps: 1, depth: wingThickness, bevelEnabled: false }; const wingGeo = new THREE.ExtrudeGeometry(wingShape, wingExtrudeSettings); wingGeo.center(); wingGeo.rotateY(Math.PI / 2); const wingMat = darkMat; const wingLeft = new THREE.Mesh(wingGeo, wingMat); const wingRight = new THREE.Mesh(wingGeo, wingMat); wingLeft.position.x = -(cockpitRadius + pylonLength + wingThickness / 2); wingRight.position.x = cockpitRadius + pylonLength + wingThickness / 2; tieGroup.add(wingLeft); tieGroup.add(wingRight); const cannonMountGeo = new THREE.BoxGeometry(0.4, 0.4, 0.8); const cannonMountMat = darkMat; const mountLeft = new THREE.Mesh(cannonMountGeo, cannonMountMat); const mountRight = new THREE.Mesh(cannonMountGeo, cannonMountMat); mountLeft.position.set(-cockpitRadius * 0.4, -cockpitRadius * 0.8, cockpitRadius * 0.7); mountRight.position.set(cockpitRadius * 0.4, -cockpitRadius * 0.8, cockpitRadius * 0.7); tieGroup.add(mountLeft); tieGroup.add(mountRight); tieGroup.scale.set(0.9, 0.9, 0.9);
+
+            // <<< Calculate unique speed for this TIE >>>
+            const uniqueSpeed = TIE_FIGHTER_BASE_SPEED + (Math.random() - 0.5) * 2 * TIE_FIGHTER_SPEED_VARIATION;
+
+            tieGroup.userData = {
+                type: 'tieFighter', isDestructible: true, hp: TIE_FIGHTER_HP,
+                state: 'patrolling', targetPosition: null, patrolCenter: new THREE.Vector3(),
+                lastShotTime: 0, velocity: new THREE.Vector3(),
+                boundingSphere: new THREE.Sphere(new THREE.Vector3(), wingSize * 0.9),
+                speed: uniqueSpeed, // <<< Store unique speed
+                targetOffset: new THREE.Vector3(
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 15,
+                    (Math.random() - 0.5) * 5
+                )
+             };
+            return tieGroup;
+        }
+
+        function spawnTIEFighters(count, centerPos, spawnRadius) { /* ... No Changes ... */
+            for (let i = 0; i < count; i++) { const angle = Math.random() * Math.PI * 2; const radius = TIE_PATROL_RADIUS + (Math.random() - 0.5) * TIE_PATROL_RADIUS * 0.5; const x = centerPos.x + Math.cos(angle) * radius; const z = centerPos.z + Math.sin(angle) * radius; const y = centerPos.y + (Math.random() - 0.5) * 150; const tie = createTIEFighter(); tie.position.set(x, y, z); tie.userData.patrolCenter.copy(centerPos); tie.lookAt(centerPos); spaceObjects.push(tie); scene.add(tie); }
+        }
+        function createAsteroid() { /* ... No Changes ... */
+             const size = 8 + Math.random() * 20; const geo = new THREE.IcosahedronGeometry(size, 2); const positionAttribute = geo.getAttribute('position'); const normalAttribute = geo.getAttribute('normal'); const vertices = []; for (let i = 0; i < positionAttribute.count; i++) { const vertex = new THREE.Vector3(); vertex.fromBufferAttribute(positionAttribute, i); const normal = new THREE.Vector3(); normal.fromBufferAttribute(normalAttribute, i); const maxDisplaceFactor = 0.15; const displacementMagnitude = Math.random() * size * maxDisplaceFactor; vertex.addScaledVector(normal, displacementMagnitude); vertices.push(vertex.x, vertex.y, vertex.z); } geo.setAttribute('position', new THREE.Float32BufferAttribute(vertices, 3)); geo.computeVertexNormals(); const mat = new THREE.MeshStandardMaterial({ color: new THREE.Color(Math.random()*0.5+0.2, Math.random()*0.5+0.2, Math.random()*0.5+0.2), roughness: 0.8, metalness: 0.1, flatShading: true }); const asteroid = new THREE.Mesh(geo, mat); asteroid.userData = { isDestructible: true, type: 'asteroid', rotationSpeed: new THREE.Vector3((Math.random()-0.5)*0.01, (Math.random()-0.5)*0.01, (Math.random()-0.5)*0.01) }; asteroid.userData.boundingBox = new THREE.Box3().setFromObject(asteroid); return asteroid;
+        }
+        function populateSpace() { /* ... No Changes ... */
+             const placeRadius = SPACE_EXTENT * 0.9; const centerAvoidRadius = 300; const destroyerAvoidRadius = starDestroyer ? starDestroyer.userData.boundingBox.getSize(new THREE.Vector3()).length() * 0.6 : 500; for (let i = 0; i < NUM_ASTEROIDS; i++) { const asteroid = createAsteroid(); let x, y, z, distSq, distToDestroyerSq; let attempts = 0; do { x = (Math.random() - 0.5) * 2 * placeRadius; y = (Math.random() - 0.5) * 2 * placeRadius; z = (Math.random() - 0.5) * 2 * placeRadius; distSq = new THREE.Vector3(x,y,z).distanceToSquared(aircraftState.position); distToDestroyerSq = starDestroyer ? new THREE.Vector3(x,y,z).distanceToSquared(starDestroyer.position) : Infinity; attempts++; } while ((distSq < centerAvoidRadius*centerAvoidRadius || distToDestroyerSq < destroyerAvoidRadius*destroyerAvoidRadius) && attempts < 50) if(attempts < 50) { asteroid.position.set(x, y, z); spaceObjects.push(asteroid); scene.add(asteroid); } }
+        }
+        function setupEventListeners() { /* ... No Changes ... */
+             window.addEventListener('resize', onWindowResize, false); joystickBaseElement.addEventListener('touchstart', onJoystickStart, { passive: false }); joystickBaseElement.addEventListener('touchmove', onJoystickMove, { passive: false }); joystickBaseElement.addEventListener('touchend', onJoystickEnd, { passive: false }); joystickBaseElement.addEventListener('touchcancel', onJoystickEnd, { passive: false }); fireButtonElement.addEventListener('touchstart', onFireButtonDown, { passive: false }); fireButtonElement.addEventListener('touchend', onFireButtonUp, { passive: false }); fireButtonElement.addEventListener('touchcancel', onFireButtonUp, { passive: false }); warpButtonElement.addEventListener('touchstart', onWarpButtonToggle, { passive: false }); joystickBaseElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); fireButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); warpButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false }); calculateJoystickBounds();
+        }
+        function calculateJoystickBounds() { /* ... No Changes ... */ uiState.joystickBaseRect = joystickBaseElement.getBoundingClientRect(); uiState.joystickMaxDist = uiState.joystickBaseRect.width / 2 - joystickHandleElement.offsetWidth / 2; }
+        function onWindowResize() { /* ... No Changes ... */ camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); calculateJoystickBounds(); }
+        function onJoystickStart(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); if (uiState.joystickActive) return; const touch = event.changedTouches[0]; if (!touch) return; uiState.joystickActive = true; uiState.joystickIdentifier = touch.identifier; updateJoystick(touch.clientX, touch.clientY); }
+        function onJoystickMove(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); if (!uiState.joystickActive) return; let touch = null; for (let i=0; i < event.changedTouches.length; i++) { if (event.changedTouches[i].identifier === uiState.joystickIdentifier) { touch = event.changedTouches[i]; break; } } if (touch) updateJoystick(touch.clientX, touch.clientY); }
+        function onJoystickEnd(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); for (let i=0; i < event.changedTouches.length; i++) { if (event.changedTouches[i].identifier === uiState.joystickIdentifier) { uiState.joystickActive = false; uiState.joystickIdentifier = null; resetJoystick(); break; } } }
+        function updateJoystick(clientX, clientY) { /* ... No Changes ... */ if (!uiState.joystickBaseRect) calculateJoystickBounds(); const baseX = uiState.joystickBaseRect.left + uiState.joystickBaseRect.width / 2; const baseY = uiState.joystickBaseRect.top + uiState.joystickBaseRect.height / 2; let deltaX = clientX - baseX; let deltaY = clientY - baseY; const dist = Math.sqrt(deltaX*deltaX + deltaY*deltaY); const maxDist = uiState.joystickMaxDist; if (dist > maxDist) { deltaX = (deltaX / dist) * maxDist; deltaY = (deltaY / dist) * maxDist; } joystickHandleElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`; aircraftState.pitchSpeed = -(deltaY / maxDist) * aircraftState.maxPitchSpeed; aircraftState.yawSpeed = -(deltaX / maxDist) * aircraftState.maxYawSpeed; }
+        function resetJoystick() { /* ... No Changes ... */ joystickHandleElement.style.transform = `translate(-50%, -50%)`; }
+        function onFireButtonDown(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); if(uiState.fireButtonPressed) return; const touch = event.changedTouches[0]; if(!touch) return; uiState.fireButtonPressed = true; uiState.fireButtonIdentifier = touch.identifier; fireRequested = true; fireButtonElement.style.backgroundColor = '#800'; }
+        function onFireButtonUp(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); for (let i=0; i < event.changedTouches.length; i++) { if (event.changedTouches[i].identifier === uiState.fireButtonIdentifier) { uiState.fireButtonPressed = false; uiState.fireButtonIdentifier = null; fireRequested = false; fireButtonElement.style.backgroundColor = '#c00'; break; } } }
+        function onWarpButtonToggle(event) { /* ... No Changes ... */ event.preventDefault(); event.stopPropagation(); aircraftState.isWarping = !aircraftState.isWarping; warpButtonElement.classList.toggle('active', aircraftState.isWarping); }
+        function updateHPDisplay() { /* ... No Changes ... */ const hpPercent = Math.max(0, (playerState.hp / PLAYER_MAX_HP) * 100); hpGaugeBarElement.style.width = `${hpPercent}%`; hpGaugeBarElement.style.backgroundColor = hpPercent > 60 ? '#00ff00' : hpPercent > 30 ? '#ffff00' : '#ff0000'; hpGaugeTextElement.textContent = `HP: ${playerState.hp}`; }
+        function fireCannon() { /* ... No Changes ... */ if (timeSinceLastShot < PLAYER_FIRE_RATE) return; timeSinceLastShot = 0; const worldCannonPositions = aircraft.userData.cannonOffsets.map(offset => offset.clone().applyMatrix4(aircraft.matrixWorld)); const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion); const baseBulletVelocity = forwardVector.multiplyScalar(PLAYER_BULLET_SPEED); for (const startPos of worldCannonPositions) { const bulletGeo = new THREE.SphereGeometry(0.3, 6, 6); const bulletMat = new THREE.MeshBasicMaterial({ color: 0xffaa00 }); const bullet = new THREE.Mesh(bulletGeo, bulletMat); bullet.position.copy(startPos); const totalVelocity = aircraftState.velocity.clone().add(baseBulletVelocity); bullet.userData = { type: 'playerBullet', velocity: totalVelocity, lifetime: PLAYER_BULLET_LIFETIME, boundingBox: new THREE.Box3() }; bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(0.6, 0.6, 0.6)); scene.add(bullet); playerBullets.push(bullet); } }
+        function updateDestroyerCannons(deltaTime, currentTime) { /* ... No Changes ... */
+             if (!starDestroyer || !aircraft) return; if(aircraft.position.distanceToSquared(starDestroyer.position) > (ENEMY_CANNON_RANGE + 300)**2) { return; } const cannonWorldPos = new THREE.Vector3(); const directionToPlayer = new THREE.Vector3(); starDestroyer.userData.cannons.forEach(cannon => { if (!cannon || cannon.userData.hp <= 0) return; cannon.getWorldPosition(cannonWorldPos); const distanceToPlayerSq = cannonWorldPos.distanceToSquared(aircraft.position); if (distanceToPlayerSq < cannon.userData.range ** 2 && currentTime - cannon.userData.lastShotTime > cannon.userData.fireRate) { cannon.userData.lastShotTime = currentTime; directionToPlayer.subVectors(aircraft.position, cannonWorldPos).normalize(); const bulletGeo = new THREE.SphereGeometry(0.5, 6, 6); const bulletMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); const bullet = new THREE.Mesh(bulletGeo, bulletMat); bullet.position.copy(cannonWorldPos).addScaledVector(directionToPlayer, 5); bullet.userData = { type: 'enemyBullet', velocity: directionToPlayer.multiplyScalar(ENEMY_BULLET_SPEED), lifetime: ENEMY_BULLET_LIFETIME, boundingBox: new THREE.Box3(), accuracy: cannon.userData.accuracy }; bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(1, 1, 1)); scene.add(bullet); enemyBullets.push(bullet); } });
+        }
+
+        // ===========================================================
+        // NEW Explosion Creation Function
+        // ===========================================================
+        function createExplosion(position, currentTime) {
+            // Clone material to allow independent opacity/color changes if needed later
+            const mat = explosionMaterial.clone();
+            const explosion = new THREE.Mesh(explosionGeometry, mat);
+
+            explosion.position.copy(position);
+            explosion.scale.setScalar(EXPLOSION_INITIAL_SCALE); // Start small
+            scene.add(explosion);
+
+            activeExplosions.push({
+                mesh: explosion,
+                startTime: currentTime
+            });
+        }
+
+        // ===========================================================
+        // NEW Explosion Update Function
+        // ===========================================================
+        function updateExplosions(deltaTime, currentTime) {
+            for (let i = activeExplosions.length - 1; i >= 0; i--) {
+                const explosion = activeExplosions[i];
+                const elapsed = currentTime - explosion.startTime;
+
+                if (elapsed >= EXPLOSION_DURATION) {
+                    // Explosion finished
+                    scene.remove(explosion.mesh);
+                    explosion.mesh.geometry.dispose(); // Clean up geometry
+                    explosion.mesh.material.dispose(); // Clean up material clone
+                    activeExplosions.splice(i, 1);
+                } else {
+                    // Animate explosion
+                    const progress = elapsed / EXPLOSION_DURATION;
+                    // Interpolate scale (e.g., linear expansion)
+                    const currentScale = THREE.MathUtils.lerp(EXPLOSION_INITIAL_SCALE, EXPLOSION_MAX_SCALE, progress);
+                    explosion.mesh.scale.setScalar(currentScale);
+                    // Interpolate opacity (fade out)
+                    explosion.mesh.material.opacity = THREE.MathUtils.lerp(1.0, 0.0, progress);
+                }
+            }
+        }
+
+
+        // ===========================================================
+        // UPDATED Main Update Loop - Use TIE Speed, Update Explosions
+        // ===========================================================
+        function update(deltaTime, currentTime) {
+             if (gameState !== 'playing') { renderer.render(scene, camera); return; } timeSinceLastShot += deltaTime; if (fireRequested && uiState.fireButtonPressed) { fireCannon(); }
+
+             // --- Player Aircraft Update ---
+             // (... No changes to player movement logic ...)
+             const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV; const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST; if (Math.abs(camera.fov - targetFov) > 0.1) { camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR); camera.updateProjectionMatrix(); } if (aircraft.userData.engineFlames) { aircraft.userData.engineFlames.forEach(flame => { flame.visible = aircraftState.isWarping; if(aircraftState.isWarping) { const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1; flame.scale.set(flicker, flicker, 1.0); } }); } if (!uiState.joystickActive) { aircraftState.pitchSpeed *= aircraftState.controlDamping; aircraftState.yawSpeed *= aircraftState.controlDamping; } if (Math.abs(aircraftState.pitchSpeed) < 0.005) aircraftState.pitchSpeed = 0; if (Math.abs(aircraftState.yawSpeed) < 0.005) aircraftState.yawSpeed = 0; aircraftState.rollSpeed *= aircraftState.controlDamping; if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0; const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion); const thrustForce = forwardVector.clone().multiplyScalar(currentThrust); const speedSq = aircraftState.velocity.lengthSq(); const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient; const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq); const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce); aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime)); const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler( aircraftState.pitchSpeed * deltaTime, aircraftState.yawSpeed * deltaTime, aircraftState.rollSpeed * deltaTime, 'YXZ' )); aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion); aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime)); aircraft.position.copy(aircraftState.position); aircraft.updateMatrixWorld(); playerBoundingSphere.center.copy(aircraft.position);
+
+
+             // --- Update Space Objects (Asteroids, TIEs) ---
+             const tempVec = new THREE.Vector3(); // General purpose temporary vector
+             const tempVec2 = new THREE.Vector3(); // Another temporary vector, e.g., for separation
+             const tempQuat = new THREE.Quaternion();
+
+             spaceObjects.forEach((obj, index) => {
+                if (!obj || !obj.userData) return;
+
+                 if (obj.userData.type === 'asteroid') {
+                     obj.rotation.x += obj.userData.rotationSpeed.x * deltaTime;
+                     obj.rotation.y += obj.userData.rotationSpeed.y * deltaTime;
+                     obj.rotation.z += obj.userData.rotationSpeed.z * deltaTime;
+                     obj.updateMatrixWorld();
+                 }
+                 else if (obj.userData.type === 'tieFighter') {
+                     if (obj.userData.hp <= 0) return; // Skip dead TIEs
+
+                     const currentTarget = obj.userData.targetPosition;
+                     const distPlayerToDestroyerSq = aircraft.position.distanceToSquared(starDestroyer.position);
+
+                     // State Transitions (Defend Destroyer)
+                     if (obj.userData.state === 'patrolling' && distPlayerToDestroyerSq < DESTROYER_DEFENSE_RADIUS ** 2) {
+                         obj.userData.state = 'attacking'; obj.userData.targetPosition = null;
+                     } else if (obj.userData.state === 'attacking' && distPlayerToDestroyerSq > (DESTROYER_DEFENSE_RADIUS * 1.3) ** 2) {
+                         obj.userData.state = 'patrolling'; obj.userData.targetPosition = null;
+                     }
+
+                     let desiredDirection = new THREE.Vector3();
+                     let targetPoint = new THREE.Vector3(); // Point the TIE wants to fly towards
+
+                     if (obj.userData.state === 'attacking') {
+                         // --- Attacking Player (with Offset) ---
+                         targetPoint.copy(aircraft.position).add(obj.userData.targetOffset);
+                         desiredDirection.subVectors(targetPoint, obj.position); // Vector towards offset target point
+
+                         const distToActualPlayerSq = obj.position.distanceToSquared(aircraft.position); // Use actual distance for range check
+
+                         // Firing Check (Uses TIE_HIT_CHANCE constant = 1.0)
+                         if (distToActualPlayerSq < TIE_CANNON_RANGE ** 2 && currentTime - obj.userData.lastShotTime > TIE_FIRE_RATE) {
+                             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(obj.quaternion);
+                             const dotToTarget = forward.dot(desiredDirection.normalize()); // Ensure normalized for dot check
+
+                             if (dotToTarget > TIE_AIM_TOLERANCE) {
+                                 obj.userData.lastShotTime = currentTime;
+                                 const bulletGeo = new THREE.SphereGeometry(0.4, 6, 6);
+                                 const bulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
+                                 const bullet = new THREE.Mesh(bulletGeo, bulletMat);
+                                 const bulletStartOffset = forward.clone().multiplyScalar(3);
+                                 bullet.position.copy(obj.position).add(bulletStartOffset);
+                                 bullet.userData = {
+                                     type: 'enemyBullet',
+                                     velocity: forward.multiplyScalar(TIE_BULLET_SPEED), // Fire straight from TIE nose
+                                     lifetime: ENEMY_BULLET_LIFETIME * 0.8,
+                                     boundingBox: new THREE.Box3(),
+                                     accuracy: TIE_HIT_CHANCE // <<< Uses the 100% chance
+                                 };
+                                 bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(0.8, 0.8, 0.8));
+                                 scene.add(bullet);
+                                 enemyBullets.push(bullet);
+                             }
+                         }
+                         desiredDirection.normalize();
+
+
+                     } else { // Patrolling
+                         // --- Patrolling ---
+                         if (!currentTarget || obj.position.distanceToSquared(currentTarget) < 100**2) {
+                            const angle = Math.random() * Math.PI * 2;
+                            const radius = Math.random() * TIE_PATROL_RADIUS;
+                            targetPoint.set(
+                                obj.userData.patrolCenter.x + Math.cos(angle) * radius,
+                                obj.userData.patrolCenter.y + (Math.random() - 0.5) * 100,
+                                obj.userData.patrolCenter.z + Math.sin(angle) * radius
+                            );
+                            obj.userData.targetPosition = targetPoint.clone(); // Store the new target
+                         } else {
+                             targetPoint.copy(currentTarget); // Use existing patrol target
+                         }
+                         desiredDirection.subVectors(targetPoint, obj.position).normalize();
+                     }
+
+
+                     // --- Separation from other TIEs ---
+                     let separationVector = tempVec2.set(0, 0, 0);
+                     let nearbyTies = 0;
+                     spaceObjects.forEach(otherObj => {
+                         if (otherObj !== obj && otherObj.userData.type === 'tieFighter' && otherObj.userData.hp > 0) {
+                             const distSq = obj.position.distanceToSquared(otherObj.position);
+                             if (distSq < TIE_SEPARATION_DISTANCE ** 2 && distSq > 0.01) {
+                                  const awayVector = tempVec.subVectors(obj.position, otherObj.position).normalize();
+                                  separationVector.add(awayVector);
+                                  nearbyTies++;
+                             }
+                         }
+                     });
+
+                     if (nearbyTies > 0) {
+                          separationVector.divideScalar(nearbyTies).normalize();
+                          desiredDirection.lerp(separationVector, TIE_SEPARATION_FORCE).normalize();
+                     }
+
+
+                     // --- Steering & Movement ---
+                     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(obj.quaternion);
+                     const rotationAngle = forward.angleTo(desiredDirection);
+
+                     if (rotationAngle > 0.01) {
+                         const maxTurn = TIE_TURN_RATE * deltaTime;
+                         const turnAngle = Math.min(rotationAngle, maxTurn);
+                         const axis = tempVec.crossVectors(forward, desiredDirection).normalize();
+                         tempQuat.setFromAxisAngle(axis, turnAngle);
+                         obj.quaternion.multiplyQuaternions(tempQuat, obj.quaternion);
+                     }
+
+                     // <<< Apply movement using the TIE's unique speed >>>
+                     const finalForward = forward.set(0, 0, -1).applyQuaternion(obj.quaternion);
+                     obj.userData.velocity = finalForward.multiplyScalar(obj.userData.speed); // <<< USE UNIQUE SPEED HERE
+                     obj.position.addScaledVector(obj.userData.velocity, deltaTime);
+                     obj.userData.boundingSphere.center.copy(obj.position);
+                     obj.updateMatrixWorld();
+                 }
+                 else if (obj.userData.type === 'destroyer') {
+                    obj.updateMatrixWorld(true);
+                 }
+             });
+
+             // --- Update Bullets and Collisions ---
+             updatePlayerBulletsAndCollisions(deltaTime, currentTime); // <<< Pass currentTime for explosions
+             updateEnemyBulletsAndCollisions(deltaTime);
+
+             // --- Update Destroyer Cannons (Firing logic) ---
+             updateDestroyerCannons(deltaTime, currentTime);
+
+             // --- Update Explosions --- <<< NEW
+             updateExplosions(deltaTime, currentTime);
+
+             // --- Check Win/Lose ---
+             checkWinLoseCondition();
+
+             // --- Update Camera ---
+             const cameraOffset = new THREE.Vector3(0, 5, 20); const cameraPosition = cameraOffset.clone().applyQuaternion(aircraft.quaternion).add(aircraft.position); const lookAtOffset = new THREE.Vector3(0, 1, -50); const lookAtPosition = lookAtOffset.clone().applyQuaternion(aircraft.quaternion).add(aircraft.position); camera.position.lerp(cameraPosition, 0.08); camera.lookAt(lookAtPosition);
+        }
+
+
+        // ===========================================================
+        // UPDATED Player Bullet Collisions - Spawn Explosion
+        // ===========================================================
+        function updatePlayerBulletsAndCollisions(deltaTime, currentTime) { // <<< Added currentTime parameter
+             const bulletsToRemove = new Set(); const objectsToRemove = []; const cannonsToRemoveFromDestroyer = [];
+             for (let i = playerBullets.length - 1; i >= 0; i--) {
+                 const bullet = playerBullets[i];
+                 bullet.userData.lifetime -= deltaTime;
+                 if (bullet.userData.lifetime <= 0) { bulletsToRemove.add(i); continue; }
+                 bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
+                 bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(0.6, 0.6, 0.6));
+                 let hit = false;
+                 for (let j = spaceObjects.length - 1; j >= 0; j--) {
+                     const obj = spaceObjects[j];
+                     if (!obj || !obj.userData || !obj.userData.isDestructible || obj.userData.hp <= 0) continue;
+
+                     if (obj.userData.type === 'asteroid') {
+                         if (obj.userData.boundingBox && bullet.userData.boundingBox.intersectsBox(obj.userData.boundingBox)) {
+                             bulletsToRemove.add(i); hit = true; break;
+                         }
+                     } else if (obj.userData.type === 'destroyer') {
+                         if (obj.userData.boundingBox && obj.userData.boundingBox.intersectsSphere(new THREE.Sphere(bullet.position, 10))) { // Broad phase check first
+                             let hitCannon = false;
+                             for(let c = obj.userData.cannons.length - 1; c >= 0; c--) {
+                                 const cannon = obj.userData.cannons[c];
+                                 if(cannon.userData.hp <= 0) continue;
+                                 const cannonWorldBB = cannon.userData.boundingBox.clone().applyMatrix4(cannon.matrixWorld);
+                                 if (bullet.userData.boundingBox.intersectsBox(cannonWorldBB)) {
+                                     cannon.userData.hp--; bulletsToRemove.add(i); hit = true; hitCannon = true;
+                                     if (cannon.userData.hp <= 0) {
+                                         cannon.visible = false;
+                                         cannonsToRemoveFromDestroyer.push({ cannonIndex: c, destroyer: obj });
+                                         createExplosion(cannonWorldBB.getCenter(new THREE.Vector3()), currentTime); // <<< Explosion for cannon
+                                     }
+                                     break; // Exit cannon loop once hit
+                                 }
+                             }
+                             if (!hitCannon && obj.userData.boundingBox.intersectsBox(bullet.userData.boundingBox)) { // Hull hit
+                                 obj.userData.destroyerHits++; bulletsToRemove.add(i); hit = true;
+                             }
+                             if(hit) break; // Exit object loop if hit
+                         }
+                     } else if (obj.userData.type === 'tieFighter') {
+                         if (obj.userData.boundingSphere && bullet.userData.boundingBox.intersectsSphere(obj.userData.boundingSphere)) {
+                             obj.userData.hp--;
+                             bulletsToRemove.add(i);
+                             hit = true;
+                             console.log(`TIE Hit! HP: ${obj.userData.hp}`);
+                             if (obj.userData.hp <= 0) {
+                                 console.log("TIE Destroyed!");
+                                 createExplosion(obj.position, currentTime); // <<< CREATE EXPLOSION HERE
+                                 objectsToRemove.push({ index: j, object: obj }); // Mark TIE for removal
+                             }
+                             break; // Exit object loop once hit
+                         }
+                     }
+                 } // End object loop
+             } // End bullet loop
+
+             cannonsToRemoveFromDestroyer.forEach(item => {
+                 // Safely remove cannon - check if index is still valid
+                  if(item.destroyer.userData.cannons[item.cannonIndex] && item.destroyer.userData.cannons[item.cannonIndex].userData.hp <= 0) {
+                     // Ensure the cannon object is actually removed from the group to stop rendering
+                     const cannonToRemove = item.destroyer.userData.cannons[item.cannonIndex];
+                     item.destroyer.remove(cannonToRemove);
+                     item.destroyer.userData.cannons.splice(item.cannonIndex, 1);
+                 }
+             });
+
+             // Remove destroyed objects (TIEs) from the main list and scene
+             const sortedObjectIndices = objectsToRemove.sort((a, b) => b.index - a.index);
+             sortedObjectIndices.forEach(item => {
+                 if (item.index < spaceObjects.length && spaceObjects[item.index] === item.object) {
+                     scene.remove(item.object); // Remove from scene
+                     // Dispose geometry/material if needed for complex objects, TIE is simple enough maybe not critical
+                     spaceObjects.splice(item.index, 1); // Remove from tracking list
+                 }
+             });
+
+             // Remove used bullets
+             const sortedBulletIndices = [...bulletsToRemove].sort((a, b) => b - a);
+             sortedBulletIndices.forEach(index => {
+                 if (index < playerBullets.length) {
+                     const bullet = playerBullets[index];
+                     scene.remove(bullet);
+                     bullet.geometry.dispose();
+                     bullet.material.dispose();
+                     playerBullets.splice(index, 1);
+                 }
+             });
+        }
+        function updateEnemyBulletsAndCollisions(deltaTime) { /* ... No Changes Needed (Uses bullet.userData.accuracy = 1.0) ... */
+             const bulletsToRemove = new Set(); for (let i = enemyBullets.length - 1; i >= 0; i--) { const bullet = enemyBullets[i]; if (!bullet || !bullet.userData) { bulletsToRemove.add(i); continue; } bullet.userData.lifetime -= deltaTime; if (bullet.userData.lifetime <= 0 || bullet.position.lengthSq() > SPACE_EXTENT**2 * 1.5 ) { bulletsToRemove.add(i); continue; } bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime)); bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(1, 1, 1)); if (bullet.userData.boundingBox.intersectsSphere(playerBoundingSphere)) { bulletsToRemove.add(i); const hitChance = bullet.userData.accuracy || 0.01; if (Math.random() < hitChance) { playerState.hp--; updateHPDisplay(); console.log(`Player Hit! HP: ${playerState.hp}, Hit Chance: ${hitChance}`); } } } const sortedBulletIndices = [...bulletsToRemove].sort((a, b) => b - a); sortedBulletIndices.forEach(index => { if (index < enemyBullets.length) { const bullet = enemyBullets[index]; scene.remove(bullet); enemyBullets.splice(index, 1); } });
+        }
+        function checkWinLoseCondition() { /* ... No Changes ... */
+             if (gameState !== 'playing') return; if (playerState.hp <= 0) { gameState = 'lost'; gameOverDisplayElement.textContent = "YOU HAVE BEEN DESTROYED!"; gameOverDisplayElement.style.color = "red"; gameOverDisplayElement.style.display = 'block'; aircraftState.velocity.set(0,0,0); aircraftState.pitchSpeed = 0; aircraftState.yawSpeed = 0; aircraftState.rollSpeed = 0; return; } if (starDestroyer && starDestroyer.userData.destroyerHits >= DESTROYER_WIN_HITS) { gameState = 'won'; gameOverDisplayElement.textContent = `DESTROYER DISABLED! (${starDestroyer.userData.destroyerHits} Hits)`; gameOverDisplayElement.style.color = "lime"; gameOverDisplayElement.style.display = 'block'; enemyBullets.forEach(b => scene.remove(b)); enemyBullets = []; }
+        }
+        function animate() { /* ... No Changes ... */
+            requestAnimationFrame(animate); const deltaTime = Math.min(clock.getDelta(), 0.05); const currentTime = clock.elapsedTime; update(deltaTime, currentTime); renderer.render(scene, camera);
+        }
+
+    </script>
+</body>
+</html>
