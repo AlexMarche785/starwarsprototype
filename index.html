@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>Space Fighter Sim - Varied TIEs</title> 
+    <title>Space Fighter Sim - Varied TIEs</title>
     <style>
         body { margin: 0; overflow: hidden; background-color: #000000; }
         canvas { display: block; }
@@ -302,7 +302,7 @@
             aircraftState.pitchSpeed = -(deltaY / maxDist) * aircraftState.maxPitchSpeed;
             aircraftState.yawSpeed = -(deltaX / maxDist) * aircraftState.maxYawSpeed;
 
-            console.log(`updateJoystick: deltaX=<span class="math-inline">\{deltaX\.toFixed\(2\)\}, deltaY\=</span>{deltaY.toFixed(2)}, pitchSpeed=<span class="math-inline">\{aircraftState\.pitchSpeed\.toFixed\(2\)\}, yawSpeed\=</span>{aircraftState.yawSpeed.toFixed(2)}, maxDist=${maxDist.toFixed(2)}`); // Log added
+            console.log(`updateJoystick: deltaX=${deltaX.toFixed(2)}, deltaY=${deltaY.toFixed(2)}, pitchSpeed=${aircraftState.pitchSpeed.toFixed(2)}, yawSpeed=${aircraftState.yawSpeed.toFixed(2)}, maxDist=${maxDist.toFixed(2)}`); // Corrected Log
         }
 
         function resetJoystick() { /* ... No Changes ... */ joystickHandleElement.style.transform = `translate(-50%, -50%)`; }
