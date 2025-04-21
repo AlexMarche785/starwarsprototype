@@ -12,7 +12,15 @@
         width: 100%;  
     }
         body { background-color: #000000; }
-        canvas { display: block; }
+        canvas {
+    display: block;
+    position: fixed; /* Change position from default/block */
+    top: 0;         /* Position it at the top edge */
+    left: 0;        /* Position it at the left edge */
+    width: 100%;    /* Make sure it spans the full width */
+    height: 100%;   /* Make sure it spans the full height */
+    z-index: 0;     /* Ensure other UI elements (z-index 1 and 10) appear above it */
+}
         #info {
             position: absolute;
             top: 50px; /* Lowered further */
