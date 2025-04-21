@@ -13,9 +13,9 @@
         }
         body { background-color: #000000; }
         canvas {
-            display: block;
-            /* Removed position: fixed; based on the latest image showing correct UI with just display: block; */
-        }
+    display: block;
+    pointer-events: none; 
+}
         #info {
             position: absolute;
             top: 50px;
@@ -181,8 +181,58 @@
             hpGaugeContainerElement = document.getElementById('hp-gauge-container'); hpGaugeBarElement = document.getElementById('hp-gauge-bar'); hpGaugeTextElement = document.getElementById('hp-gauge-text');
             gameOverDisplayElement = document.getElementById('game-over-display');
             updateHPDisplay();
-            setupEventListeners();
-        }
+            setupEventListeners() {
+    window.addEventListener('resize', onWindowResize, false);
+
+    // Add keyboard listeners
+    window.addEventListener('keydown', onKeyDown, false);
+    window.addEventListener('keyup', onKeyUp, false);
+
+    joystickBaseElement.addEventListener('touchstart', onJoystickStart, { passive: false });
+    joystickBaseElement.addEventListener('touchmove', onJoystickMove, { passive: false });
+    joystickBaseElement.addEventListener('touchend', onJoystickEnd, { passive: false });
+    joystickBaseElement.addEventListener('touchcancel', onJoystickEnd, { passive: false });
+
+    fireButtonElement.addEventListener('touchstart', onFireButtonDown, { passive: false });
+    fireButtonElement.addEventListener('touchend', onFireButtonUp, { passive: false });
+    fireButtonElement.addEventListener('touchcancel', onFireButtonUp, { passive: false });
+
+    warpButtonElement.addEventListener('touchstart', onWarpButtonToggle, { passive: false });
+
+    joystickBaseElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    fireButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+    warpButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
+
+                const pressedKeys = {};
+
+function onKeyDown(event) {
+    pressedKeys[event.key] = true;
+    // Prevent default scroll behavior for arrow keys and space
+    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+        event.preventDefault();
+    }
+    // Handle fire on space key down
+    if (event.key === ' ') {
+         fireRequested = true;
+         // You might want to visually indicate fire button is pressed here too
+    }
+     // Handle warp toggle on W key
+    if (event.key.toLowerCase() === 'w') {
+        aircraftState.isWarping = !aircraftState.isWarping;
+        // Update warp button visual state if needed (though it's a toggle now)
+        // warpButtonElement.classList.toggle('active', aircraftState.isWarping); // Assuming you add this button back later
+    }
+}
+
+function onKeyUp(event) {
+    pressedKeys[event.key] = false;
+    // Stop firing on space key up
+    if (event.key === ' ') {
+         fireRequested = false;
+    }
+}
+    calculateJoystickBounds();
+}
 
         function createStarfield() {
             const starGeometry = new THREE.BufferGeometry(); const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: true }); const starVertices = [];
@@ -437,69 +487,94 @@
             if (fireRequested && uiState.fireButtonPressed && timeSinceLastShot >= PLAYER_FIRE_RATE) {
                 fireCannon();
             }
+////---- TOP LINE
+           // --- Player Aircraft Update ---
+// ... debug log ...
 
-            // --- Player Aircraft Update ---
-            // DEBUG LOG: Player state at start of update
-            console.log(`DEBUG LOG: Player State: PitchSpeed=${aircraftState.pitchSpeed.toFixed(2)}, YawSpeed=${aircraftState.yawSpeed.toFixed(2)}, Velocity=${aircraftState.velocity.length().toFixed(2)}, Position=${aircraftState.position.x.toFixed(0)},${aircraftState.position.y.toFixed(0)},${aircraftState.position.z.toFixed(0)}`);
+// (... No changes to player movement logic ...)
+const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV; const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST; if (Math.abs(camera.fov - targetFov) > 0.1) { camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR); camera.updateProjectionMatrix(); } if (aircraft.userData.engineFlames) { aircraft.userData.engineFlames.forEach(flame => { flame.visible = aircraftState.isWarping; if(aircraftState.isWarping) { const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1; flame.scale.set(flicker, flicker, 1.0); } }); } if (!uiState.joystickActive) { aircraftState.pitchSpeed *= aircraftState.controlDamping; aircraftState.yawSpeed *= aircraftState.controlDamping; } if (Math.abs(aircraftState.pitchSpeed) < 0.005) aircraftState.pitchSpeed = 0; if (Math.abs(aircraftState.yawSpeed) < 0.005) aircraftState.yawSpeed = 0; aircraftState.rollSpeed *= aircraftState.controlDamping; if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0; const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion); const thrustForce = forwardVector.clone().multiplyScalar(currentThrust); const speedSq = aircraftState.velocity.lengthSq(); const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient; const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq); const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce); aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime)); const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler( aircraftState.pitchSpeed * deltaTime, aircraftState.yawSpeed * deltaTime, aircraftState.rollSpeed * deltaTime, 'YXZ' )); aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion); aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime)); aircraft.position.copy(aircraftState.position); aircraft.updateMatrixWorld(); playerBoundingSphere.center.copy(aircraft.position);
+// ... rest of update function ...
+Replace the pitch/yaw/roll update logic before applying the quaternion and velocity:
 
+JavaScript
 
-            const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV;
-            const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST;
-
-            if (Math.abs(camera.fov - targetFov) > 0.1) {
-                camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR);
-                camera.updateProjectionMatrix();
-            }
-
-            if (aircraft.userData.engineFlames) {
-                aircraft.userData.engineFlames.forEach(flame => {
-                    flame.visible = aircraftState.isWarping;
-                    if(aircraftState.isWarping) {
-                        const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1;
-                        flame.scale.set(flicker, flicker, 1.0);
-                    }
-                });
-            }
-
-            if (!uiState.joystickActive) {
-                aircraftState.pitchSpeed *= aircraftState.controlDamping;
-                aircraftState.yawSpeed *= aircraftState.controlDamping;
-            }
-
-            if (Math.abs(aircraftState.pitchSpeed) < 0.005) aircraftState.pitchSpeed = 0;
-            if (Math.abs(aircraftState.yawSpeed) < 0.005) aircraftState.yawSpeed = 0;
-
-            // Roll is currently only affected by damping, no input
-            aircraftState.rollSpeed *= aircraftState.controlDamping;
-            if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0;
+// --- Player Aircraft Update ---
+// DEBUG LOG: Player state at start of update
+console.log(`DEBUG LOG: Player State: PitchSpeed=<span class="math-inline">\{aircraftState\.pitchSpeed\.toFixed\(2\)\}, YawSpeed\=</span>{aircraftState.yawSpeed.toFixed(2)}, Velocity=<span class="math-inline">\{aircraftState\.velocity\.length\(\)\.toFixed\(2\)\}, Position\=</span>{aircraftState.position.x.toFixed(0)},<span class="math-inline">\{aircraftState\.position\.y\.toFixed\(0\)\},</span>{aircraftState.position.z.toFixed(0)}`);
 
 
-            const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion);
-            const thrustForce = forwardVector.clone().multiplyScalar(currentThrust);
+const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV;
+const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST;
 
-            const speedSq = aircraftState.velocity.lengthSq();
-            const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient;
-            const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq);
+if (Math.abs(camera.fov - targetFov) > 0.1) {
+    camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR);
+    camera.updateProjectionMatrix();
+}
 
-            const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce);
-            aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime));
+if (aircraft.userData.engineFlames) {
+    aircraft.userData.engineFlames.forEach(flame => {
+        flame.visible = aircraftState.isWarping;
+        if(aircraftState.isWarping) {
+            const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1;
+            flame.scale.set(flicker, flicker, 1.0);
+        }
+    });
+}
+
+// === BEGIN Keyboard/Joystick Input Handling ===
+// Reset speeds if no joystick touch is active
+if (!uiState.joystickActive) {
+     aircraftState.pitchSpeed = 0; // Reset fully if using keyboard/no touch
+     aircraftState.yawSpeed = 0;   // Reset fully if using keyboard/no touch
+     // Roll is only keyboard
+     aircraftState.rollSpeed *= aircraftState.controlDamping; // Keep damping existing roll
+     if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0;
+
+    // Apply keyboard input if joystick is not active
+    if (pressedKeys['ArrowUp']) aircraftState.pitchSpeed = -aircraftState.maxPitchSpeed; // Up arrow pitches down (inverted)
+    if (pressedKeys['ArrowDown']) aircraftState.pitchSpeed = aircraftState.maxPitchSpeed; // Down arrow pitches up (inverted)
+    if (pressedKeys['ArrowLeft']) aircraftState.yawSpeed = aircraftState.maxYawSpeed;   // Left arrow yaws left (non-inverted standard aircraft yaw)
+    if (pressedKeys['ArrowRight']) aircraftState.yawSpeed = -aircraftState.maxYawSpeed; // Right arrow yaws right (non-inverted standard aircraft yaw)
+    if (pressedKeys['q']) aircraftState.rollSpeed = aircraftState.maxRollSpeed;        // Q rolls left
+    if (pressedKeys['e']) aircraftState.rollSpeed = -aircraftState.maxRollSpeed;       // E rolls right
+
+} else {
+    // If joystick is active, its updateJoystick function already sets pitchSpeed and yawSpeed
+    // Roll is still only keyboard input
+     aircraftState.rollSpeed *= aircraftState.controlDamping; // Keep damping existing roll
+     if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0;
+     if (pressedKeys['q']) aircraftState.rollSpeed = aircraftState.maxRollSpeed;        // Q rolls left
+     if (pressedKeys['e']) aircraftState.rollSpeed = -aircraftState.maxRollSpeed;       // E rolls right
+}
+ // === END Keyboard/Joystick Input Handling ===
 
 
-            const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-                aircraftState.pitchSpeed * deltaTime,
-                aircraftState.yawSpeed * deltaTime,
-                aircraftState.rollSpeed * deltaTime,
-                'YXZ' // Order matters! YXZ is typical for flight sims (Yaw, then Pitch, then Roll)
-            ));
-            aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion);
+const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion);
+const thrustForce = forwardVector.clone().multiplyScalar(currentThrust);
+
+const speedSq = aircraftState.velocity.lengthSq();
+const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient;
+const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq);
+
+const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce);
+aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime));
 
 
-            aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime));
-            aircraft.position.copy(aircraftState.position);
+const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+    aircraftState.pitchSpeed * deltaTime,
+    aircraftState.yawSpeed * deltaTime,
+    aircraftState.rollSpeed * deltaTime,
+    'YXZ' // Order matters! YXZ is typical for flight sims (Yaw, then Pitch, then Roll)
+));
+aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion);
 
-            aircraft.updateMatrixWorld(); // Ensure world matrix is updated for accurate positioning
-            playerBoundingSphere.center.copy(aircraft.position);
 
+aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime));
+aircraft.position.copy(aircraftState.position);
+
+aircraft.updateMatrixWorld();
+playerBoundingSphere.center.copy(aircraft.position);
+            //--------------BOTTOM LINE
 
             // --- Update Space Objects (Asteroids, TIEs) ---
             const tempVec = new THREE.Vector3(); // General purpose temporary vector
