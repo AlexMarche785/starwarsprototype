@@ -13,9 +13,9 @@
         }
         body { background-color: #000000; }
         canvas {
-    display: block;
-    pointer-events: none; 
-}
+            display: block;
+            pointer-events: none;
+        }
         #info {
             position: absolute;
             top: 50px;
@@ -23,7 +23,6 @@
             color: white; font-family: sans-serif; background: rgba(0,0,0,0.5);
             padding: 5px; border-radius: 3px; font-size: 12px; z-index: 1;
         }
-        /* HP Gauge Styling */
         #hp-gauge-container {
             position: absolute;
             top: 10px;
@@ -64,7 +63,6 @@
             display: none; z-index: 20;
         }
 
-        /* --- UI Controls --- */
         .touch-control { position: absolute; bottom: 20px; opacity: 0.6; user-select: none; -webkit-user-select: none; touch-action: none; z-index: 10; }
         #joystick-base { left: 20px; width: 120px; height: 120px; background-color: #444; border-radius: 50%; border: 2px solid #222; }
         #joystick-handle { position: absolute; width: 60px; height: 60px; background-color: #888; border-radius: 50%; top: 50%; left: 50%; transform: translate(-50%, -50%); pointer-events: none; }
@@ -97,7 +95,6 @@
         let aircraft, stars, starDestroyer;
         let clock = new THREE.Clock();
 
-        // --- Constants ---
         const SPACE_EXTENT = 3000; const NUM_ASTEROIDS = 150; const PLAYER_FIRE_RATE = 0.15;
         const PLAYER_BULLET_SPEED = 300; const PLAYER_BULLET_LIFETIME = 5;
         const ENEMY_BULLET_SPEED = 250;
@@ -109,7 +106,6 @@
         const DESTROYER_CANNON_HP = 5; const MAX_YAW_SPEED = Math.PI * 0.6;
         const PLAYER_MAX_HP = 100;
 
-        // --- TIE Fighter Constants ---
         const NUM_TIE_FIGHTERS = 10;
         const TIE_FIGHTER_HP = 3;
         const TIE_FIGHTER_BASE_SPEED = 45;
@@ -125,12 +121,10 @@
         const TIE_SEPARATION_DISTANCE = 30;
         const TIE_SEPARATION_FORCE = 0.2;
 
-        // --- Explosion Constants ---
         const EXPLOSION_DURATION = 0.6;
         const EXPLOSION_MAX_SCALE = 20;
         const EXPLOSION_INITIAL_SCALE = 0.5;
 
-        // --- Game State ---
         let gameState = 'playing';
         const playerState = { hp: PLAYER_MAX_HP };
         const aircraftState = {
@@ -151,13 +145,15 @@
         let timeSinceLastShot = 0; let fireRequested = false;
         const playerBoundingSphere = new THREE.Sphere(new THREE.Vector3(), 3);
 
-        // --- Shared Explosion Geometry & Material ---
         const explosionGeometry = new THREE.SphereGeometry(1, 16, 12);
         const explosionMaterial = new THREE.MeshBasicMaterial({
             color: 0xffaa33,
             transparent: true,
             opacity: 1.0,
         });
+
+        // Keep track of pressed keys for keyboard input
+        const pressedKeys = {};
 
         init();
         animate();
@@ -172,67 +168,14 @@
             aircraft = createXWing(); aircraft.position.copy(aircraftState.position); aircraft.rotation.copy(aircraftState.rotation); scene.add(aircraft);
             starDestroyer = createStarDestroyer(); spaceObjects.push(starDestroyer); scene.add(starDestroyer);
             spawnTIEFighters(NUM_TIE_FIGHTERS, starDestroyer.position, TIE_PATROL_RADIUS * 1.5);
-             // DEBUG LOG: Total objects in spaceObjects after spawning
-            console.log(`DEBUG LOG: Total objects in spaceObjects after spawning TIEs and Destroyer: ${spaceObjects.length}`);
             populateSpace();
 
-            // Get UI elements
             joystickHandleElement=document.getElementById('joystick-handle'); joystickBaseElement=document.getElementById('joystick-base'); fireButtonElement=document.getElementById('fire-button'); warpButtonElement=document.getElementById('warp-button');
             hpGaugeContainerElement = document.getElementById('hp-gauge-container'); hpGaugeBarElement = document.getElementById('hp-gauge-bar'); hpGaugeTextElement = document.getElementById('hp-gauge-text');
             gameOverDisplayElement = document.getElementById('game-over-display');
             updateHPDisplay();
-            setupEventListeners() {
-    window.addEventListener('resize', onWindowResize, false);
-
-    // Add keyboard listeners
-    window.addEventListener('keydown', onKeyDown, false);
-    window.addEventListener('keyup', onKeyUp, false);
-
-    joystickBaseElement.addEventListener('touchstart', onJoystickStart, { passive: false });
-    joystickBaseElement.addEventListener('touchmove', onJoystickMove, { passive: false });
-    joystickBaseElement.addEventListener('touchend', onJoystickEnd, { passive: false });
-    joystickBaseElement.addEventListener('touchcancel', onJoystickEnd, { passive: false });
-
-    fireButtonElement.addEventListener('touchstart', onFireButtonDown, { passive: false });
-    fireButtonElement.addEventListener('touchend', onFireButtonUp, { passive: false });
-    fireButtonElement.addEventListener('touchcancel', onFireButtonUp, { passive: false });
-
-    warpButtonElement.addEventListener('touchstart', onWarpButtonToggle, { passive: false });
-
-    joystickBaseElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-    fireButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-    warpButtonElement.addEventListener('touchmove', (e) => e.preventDefault(), { passive: false });
-
-                const pressedKeys = {};
-
-function onKeyDown(event) {
-    pressedKeys[event.key] = true;
-    // Prevent default scroll behavior for arrow keys and space
-    if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
-        event.preventDefault();
-    }
-    // Handle fire on space key down
-    if (event.key === ' ') {
-         fireRequested = true;
-         // You might want to visually indicate fire button is pressed here too
-    }
-     // Handle warp toggle on W key
-    if (event.key.toLowerCase() === 'w') {
-        aircraftState.isWarping = !aircraftState.isWarping;
-        // Update warp button visual state if needed (though it's a toggle now)
-        // warpButtonElement.classList.toggle('active', aircraftState.isWarping); // Assuming you add this button back later
-    }
-}
-
-function onKeyUp(event) {
-    pressedKeys[event.key] = false;
-    // Stop firing on space key up
-    if (event.key === ' ') {
-         fireRequested = false;
-    }
-}
-    calculateJoystickBounds();
-}
+            setupEventListeners();
+        }
 
         function createStarfield() {
             const starGeometry = new THREE.BufferGeometry(); const starMaterial = new THREE.PointsMaterial({ color: 0xffffff, size: 1.5, sizeAttenuation: true }); const starVertices = [];
@@ -280,6 +223,10 @@ function onKeyUp(event) {
         }
         function setupEventListeners() {
             window.addEventListener('resize', onWindowResize, false);
+
+            window.addEventListener('keydown', onKeyDown, false);
+            window.addEventListener('keyup', onKeyUp, false);
+
             joystickBaseElement.addEventListener('touchstart', onJoystickStart, { passive: false });
             joystickBaseElement.addEventListener('touchmove', onJoystickMove, { passive: false });
             joystickBaseElement.addEventListener('touchend', onJoystickEnd, { passive: false });
@@ -300,9 +247,29 @@ function onKeyUp(event) {
         function calculateJoystickBounds() { uiState.joystickBaseRect = joystickBaseElement.getBoundingClientRect(); uiState.joystickMaxDist = uiState.joystickBaseRect.width / 2 - joystickHandleElement.offsetWidth / 2; }
         function onWindowResize() { camera.aspect = window.innerWidth / window.innerHeight; camera.updateProjectionMatrix(); renderer.setSize(window.innerWidth, window.innerHeight); calculateJoystickBounds(); }
 
+        const pressedKeys = {};
+
+        function onKeyDown(event) {
+            pressedKeys[event.key] = true;
+            if (['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight', ' '].includes(event.key)) {
+                event.preventDefault();
+            }
+            if (event.key === ' ') {
+                 fireRequested = true;
+            }
+            if (event.key.toLowerCase() === 'w') {
+                aircraftState.isWarping = !aircraftState.isWarping;
+            }
+        }
+
+        function onKeyUp(event) {
+            pressedKeys[event.key] = false;
+            if (event.key === ' ') {
+                 fireRequested = false;
+            }
+        }
+
         function onJoystickStart(event) {
-            // DEBUG LOG: Joystick event fired
-            console.log('DEBUG LOG: Joystick event fired:', event.type);
             event.preventDefault(); event.stopPropagation();
             if (uiState.joystickActive) return;
             const touch = event.changedTouches[0];
@@ -313,8 +280,6 @@ function onKeyUp(event) {
         }
 
         function onJoystickMove(event) {
-             // DEBUG LOG: Joystick event fired
-            console.log('DEBUG LOG: Joystick event fired:', event.type);
             event.preventDefault(); event.stopPropagation();
             if (!uiState.joystickActive) return;
             let touch = null;
@@ -328,8 +293,6 @@ function onKeyUp(event) {
         }
 
         function onJoystickEnd(event) {
-             // DEBUG LOG: Joystick event fired
-            console.log('DEBUG LOG: Joystick event fired:', event.type);
             event.preventDefault(); event.stopPropagation();
             for (let i=0; i < event.changedTouches.length; i++) {
                 if (event.changedTouches[i].identifier === uiState.joystickIdentifier) {
@@ -355,19 +318,13 @@ function onKeyUp(event) {
             }
             joystickHandleElement.style.transform = `translate(calc(-50% + ${deltaX}px), calc(-50% + ${deltaY}px))`;
 
-            // Inverted controls mapping
             aircraftState.pitchSpeed = -(deltaY / maxDist) * aircraftState.maxPitchSpeed;
             aircraftState.yawSpeed = -(deltaX / maxDist) * aircraftState.maxYawSpeed;
-
-            // DEBUG LOG: Joystick calculation and state update
-            console.log(`DEBUG LOG: updateJoystick: deltaX=${deltaX.toFixed(2)}, deltaY=${deltaY.toFixed(2)}, pitchSpeed=${aircraftState.pitchSpeed.toFixed(2)}, yawSpeed=${aircraftState.yawSpeed.toFixed(2)}, maxDist=${maxDist.toFixed(2)}`);
         }
 
         function resetJoystick() { joystickHandleElement.style.transform = `translate(-50%, -50%)`; }
 
         function onFireButtonDown(event) {
-            // DEBUG LOG: Fire button down
-            console.log('DEBUG LOG: onFireButtonDown fired.');
             event.preventDefault(); event.stopPropagation();
             if(uiState.fireButtonPressed) return;
             const touch = event.changedTouches[0];
@@ -403,8 +360,6 @@ function onKeyUp(event) {
         }
 
         function fireCannon() {
-            // DEBUG LOG: Fire cannon called
-            console.log('DEBUG LOG: fireCannon called!');
             if (timeSinceLastShot < PLAYER_FIRE_RATE) return;
             timeSinceLastShot = 0;
 
@@ -429,16 +384,13 @@ function onKeyUp(event) {
 
                 scene.add(bullet);
                 playerBullets.push(bullet);
-                // DEBUG LOG: Bullet created
-                console.log(`DEBUG LOG: Created player bullet. Total: ${playerBullets.length}`);
             }
         }
 
         function updateDestroyerCannons(deltaTime, currentTime) {
-            if (!starDestroyer || !aircraft) return; if(aircraft.position.distanceToSquared(starDestroyer.position) > (ENEMY_CANNON_RANGE + 300)**2) { return; } const cannonWorldPos = new THREE.Vector3(); const directionToPlayer = new THREE.Vector3(); starDestroyer.userData.cannons.forEach(cannon => { if (!cannon || cannon.userData.hp <= 0) return; cannon.getWorldPosition(cannonWorldPos); const distanceToPlayerSq = cannonWorldPos.distanceToSquared(aircraft.position); if (distanceToPlayerSq < cannon.userData.range ** 2 && currentTime - cannon.userData.lastShotTime > cannon.userData.fireRate) { cannon.userData.lastShotTime = currentTime; directionToPlayer.subVectors(aircraft.position, cannonWorldPos).normalize(); const bulletGeo = new THREE.SphereGeometry(0.5, 6, 6); const bulletMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); const bullet = new THREE.Mesh(bulletGeo, bulletMat); bullet.position.copy(cannonWorldPos).addScaledVector(directionToPlayer, 5); bullet.userData = { type: 'enemyBullet', velocity: directionToPlayer.multiplyScalar(ENEMY_BULLET_SPEED), lifetime: ENEMY_BULLET_LIFETIME, boundingBox: new THREE.Box3(), accuracy: cannon.userData.accuracy }; bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(1, 1, 1)); scene.add(bullet); enemyBullets.push(bullet); } });
+            if (!starDestroyer || !aircraft) return; if(aircraft.position.distanceToSquared(starDestroyer.position) > (ENEMY_CANNON_RANGE + 300)**2) { return; } const cannonWorldPos = new THREE.Vector3(); const directionToPlayer = new THREE.Vector3(); starDestroyer.userData.cannons.forEach(cannon => { if (!cannon || cannon.userData.hp <= 0) return; cannon.getWorldPosition(cannonWorldPos); const distanceToPlayerSq = cannonWorldPos.distanceToSquared(aircraft.position); if (distanceToPlayerSq < cannon.userData.range ** 2 && currentTime - cannon.userData.lastShotTime > cannon.userData.fireRate) { cannon.userData.lastShotTime = currentTime; directionToPlayer.subVectors(aircraft.position, cannonWorldPos).normalize(); const bulletGeo = new THREE.SphereGeometry(0.5, 6, 6); const bulletMat = new THREE.MeshBasicMaterial({ color: 0x00ff00 }); const bullet = new THREE.Mesh(bulletGeo, bulletMat); bullet.position.copy(cannonWorldPos).addScaledVector(directionToPlayer, 5); bullet.userData = { type: 'enemyBullet', velocity: directionToPlayer.multiplyScalar(ENEMY_BULLET_SPEED), lifetime: ENEMY_BULLET_LIFETIME, boundingBox: new THREE.Box3(), accuracy: ENEMY_HIT_CHANCE }; bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(1, 1, 1)); scene.add(bullet); enemyBullets.push(bullet); } });
         }
 
-        // --- NEW Explosion Creation Function ---
         function createExplosion(position, currentTime) {
             const mat = explosionMaterial.clone();
             const explosion = new THREE.Mesh(explosionGeometry, mat);
@@ -451,7 +403,6 @@ function onKeyUp(event) {
             });
         }
 
-        // --- NEW Explosion Update Function ---
         function updateExplosions(deltaTime, currentTime) {
             for (let i = activeExplosions.length - 1; i >= 0; i--) {
                 const explosion = activeExplosions[i];
@@ -470,11 +421,7 @@ function onKeyUp(event) {
             }
         }
 
-        // --- UPDATED Main Update Loop ---
         function update(deltaTime, currentTime) {
-            // DEBUG LOG: Update loop start
-            console.log(`DEBUG LOG: Update loop: DeltaTime=${deltaTime.toFixed(3)}, CurrentTime=${currentTime.toFixed(1)}, GameState=${gameState}`);
-
             if (gameState !== 'playing') {
                 renderer.render(scene, camera);
                 return;
@@ -482,103 +429,98 @@ function onKeyUp(event) {
 
             timeSinceLastShot += deltaTime;
 
-            // DEBUG LOG: Fire state check
-            console.log(`DEBUG LOG: Fire State Check: fireRequested=${fireRequested}, fireButtonPressed=${uiState.fireButtonPressed}, timeSinceLastShot=${timeSinceLastShot.toFixed(2)}, PLAYER_FIRE_RATE=${PLAYER_FIRE_RATE}`);
+            // Handle firing input
             if (fireRequested && uiState.fireButtonPressed && timeSinceLastShot >= PLAYER_FIRE_RATE) {
                 fireCannon();
             }
-////---- TOP LINE
-           // --- Player Aircraft Update ---
-// ... debug log ...
-
-// (... No changes to player movement logic ...)
-const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV; const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST; if (Math.abs(camera.fov - targetFov) > 0.1) { camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR); camera.updateProjectionMatrix(); } if (aircraft.userData.engineFlames) { aircraft.userData.engineFlames.forEach(flame => { flame.visible = aircraftState.isWarping; if(aircraftState.isWarping) { const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1; flame.scale.set(flicker, flicker, 1.0); } }); } if (!uiState.joystickActive) { aircraftState.pitchSpeed *= aircraftState.controlDamping; aircraftState.yawSpeed *= aircraftState.controlDamping; } if (Math.abs(aircraftState.pitchSpeed) < 0.005) aircraftState.pitchSpeed = 0; if (Math.abs(aircraftState.yawSpeed) < 0.005) aircraftState.yawSpeed = 0; aircraftState.rollSpeed *= aircraftState.controlDamping; if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0; const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion); const thrustForce = forwardVector.clone().multiplyScalar(currentThrust); const speedSq = aircraftState.velocity.lengthSq(); const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient; const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq); const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce); aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime)); const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler( aircraftState.pitchSpeed * deltaTime, aircraftState.yawSpeed * deltaTime, aircraftState.rollSpeed * deltaTime, 'YXZ' )); aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion); aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime)); aircraft.position.copy(aircraftState.position); aircraft.updateMatrixWorld(); playerBoundingSphere.center.copy(aircraft.position);
-// ... rest of update function ...
-Replace the pitch/yaw/roll update logic before applying the quaternion and velocity:
-
-JavaScript
-
-// --- Player Aircraft Update ---
-// DEBUG LOG: Player state at start of update
-console.log(`DEBUG LOG: Player State: PitchSpeed=<span class="math-inline">\{aircraftState\.pitchSpeed\.toFixed\(2\)\}, YawSpeed\=</span>{aircraftState.yawSpeed.toFixed(2)}, Velocity=<span class="math-inline">\{aircraftState\.velocity\.length\(\)\.toFixed\(2\)\}, Position\=</span>{aircraftState.position.x.toFixed(0)},<span class="math-inline">\{aircraftState\.position\.y\.toFixed\(0\)\},</span>{aircraftState.position.z.toFixed(0)}`);
 
 
-const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV;
-const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST;
+            // --- Player Aircraft Update ---
+            const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV;
+            const currentThrust = aircraftState.isWarping ? WARP_THRUST : NORMAL_THRUST;
 
-if (Math.abs(camera.fov - targetFov) > 0.1) {
-    camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR);
-    camera.updateProjectionMatrix();
-}
+            if (Math.abs(camera.fov - targetFov) > 0.1) {
+                camera.fov = THREE.MathUtils.lerp(camera.fov, targetFov, FOV_LERP_FACTOR);
+                camera.updateProjectionMatrix();
+            }
 
-if (aircraft.userData.engineFlames) {
-    aircraft.userData.engineFlames.forEach(flame => {
-        flame.visible = aircraftState.isWarping;
-        if(aircraftState.isWarping) {
-            const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1;
-            flame.scale.set(flicker, flicker, 1.0);
-        }
-    });
-}
+            if (aircraft.userData.engineFlames) {
+                aircraft.userData.engineFlames.forEach(flame => {
+                    flame.visible = aircraftState.isWarping;
+                    if(aircraftState.isWarping) {
+                        const flicker = 1.0 + Math.sin(Date.now() * 0.05 + flame.position.x) * 0.1;
+                        flame.scale.set(flicker, flicker, 1.0);
+                    }
+                });
+            }
 
-// === BEGIN Keyboard/Joystick Input Handling ===
-// Reset speeds if no joystick touch is active
-if (!uiState.joystickActive) {
-     aircraftState.pitchSpeed = 0; // Reset fully if using keyboard/no touch
-     aircraftState.yawSpeed = 0;   // Reset fully if using keyboard/no touch
-     // Roll is only keyboard
-     aircraftState.rollSpeed *= aircraftState.controlDamping; // Keep damping existing roll
-     if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0;
+            // === BEGIN Input Handling (Combines Keyboard and Joystick) ===
+            let currentPitchSpeed = 0;
+            let currentYawSpeed = 0;
+            let currentRollSpeed = 0;
 
-    // Apply keyboard input if joystick is not active
-    if (pressedKeys['ArrowUp']) aircraftState.pitchSpeed = -aircraftState.maxPitchSpeed; // Up arrow pitches down (inverted)
-    if (pressedKeys['ArrowDown']) aircraftState.pitchSpeed = aircraftState.maxPitchSpeed; // Down arrow pitches up (inverted)
-    if (pressedKeys['ArrowLeft']) aircraftState.yawSpeed = aircraftState.maxYawSpeed;   // Left arrow yaws left (non-inverted standard aircraft yaw)
-    if (pressedKeys['ArrowRight']) aircraftState.yawSpeed = -aircraftState.maxYawSpeed; // Right arrow yaws right (non-inverted standard aircraft yaw)
-    if (pressedKeys['q']) aircraftState.rollSpeed = aircraftState.maxRollSpeed;        // Q rolls left
-    if (pressedKeys['e']) aircraftState.rollSpeed = -aircraftState.maxRollSpeed;       // E rolls right
+            if (uiState.joystickActive) {
+                // Use joystick input for pitch and yaw if active
+                currentPitchSpeed = aircraftState.pitchSpeed;
+                currentYawSpeed = aircraftState.yawSpeed;
+            } else {
+                // Use keyboard input for pitch and yaw if joystick is not active
+                if (pressedKeys['ArrowUp']) currentPitchSpeed = -aircraftState.maxPitchSpeed;
+                if (pressedKeys['ArrowDown']) currentPitchSpeed = aircraftState.maxPitchSpeed;
+                if (pressedKeys['ArrowLeft']) currentYawSpeed = aircraftState.maxYawSpeed;
+                if (pressedKeys['ArrowRight']) currentYawSpeed = -aircraftState.maxYawSpeed;
+            }
 
-} else {
-    // If joystick is active, its updateJoystick function already sets pitchSpeed and yawSpeed
-    // Roll is still only keyboard input
-     aircraftState.rollSpeed *= aircraftState.controlDamping; // Keep damping existing roll
-     if (Math.abs(aircraftState.rollSpeed) < 0.005) aircraftState.rollSpeed = 0;
-     if (pressedKeys['q']) aircraftState.rollSpeed = aircraftState.maxRollSpeed;        // Q rolls left
-     if (pressedKeys['e']) aircraftState.rollSpeed = -aircraftState.maxRollSpeed;       // E rolls right
-}
- // === END Keyboard/Joystick Input Handling ===
+            // Roll is always keyboard controlled in this setup
+            if (pressedKeys['q']) currentRollSpeed = aircraftState.maxRollSpeed;
+            if (pressedKeys['e']) currentRollSpeed = -aircraftState.maxRollSpeed;
 
-
-const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion);
-const thrustForce = forwardVector.clone().multiplyScalar(currentThrust);
-
-const speedSq = aircraftState.velocity.lengthSq();
-const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient;
-const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq);
-
-const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce);
-aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime));
+            // Apply damping to the speeds if no input is active for that axis
+            if (!uiState.joystickActive && !pressedKeys['ArrowUp'] && !pressedKeys['ArrowDown']) currentPitchSpeed *= aircraftState.controlDamping;
+            if (!uiState.joystickActive && !pressedKeys['ArrowLeft'] && !pressedKeys['ArrowRight']) currentYawSpeed *= aircraftState.controlDamping;
+            if (!pressedKeys['q'] && !pressedKeys['e']) currentRollSpeed *= aircraftState.controlDamping;
 
 
-const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
-    aircraftState.pitchSpeed * deltaTime,
-    aircraftState.yawSpeed * deltaTime,
-    aircraftState.rollSpeed * deltaTime,
-    'YXZ' // Order matters! YXZ is typical for flight sims (Yaw, then Pitch, then Roll)
-));
-aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion);
+            // Zero out very small speeds after damping
+            if (Math.abs(currentPitchSpeed) < 0.005) currentPitchSpeed = 0;
+            if (Math.abs(currentYawSpeed) < 0.005) currentYawSpeed = 0;
+            if (Math.abs(currentRollSpeed) < 0.005) currentRollSpeed = 0;
+
+            // Apply the calculated speeds
+            aircraftState.pitchSpeed = currentPitchSpeed;
+            aircraftState.yawSpeed = currentYawSpeed;
+            aircraftState.rollSpeed = currentRollSpeed;
+
+            // === END Input Handling ===
 
 
-aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime));
-aircraft.position.copy(aircraftState.position);
+            const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion);
+            const thrustForce = forwardVector.clone().multiplyScalar(currentThrust);
 
-aircraft.updateMatrixWorld();
-playerBoundingSphere.center.copy(aircraft.position);
-            //--------------BOTTOM LINE
+            const speedSq = aircraftState.velocity.lengthSq();
+            const currentDrag = aircraftState.isWarping ? aircraftState.dragCoefficient * 0.5 : aircraftState.dragCoefficient;
+            const dragForce = aircraftState.velocity.clone().multiplyScalar(-currentDrag * speedSq);
+
+            const totalForce = new THREE.Vector3().add(thrustForce).add(dragForce);
+            aircraftState.velocity.add(totalForce.multiplyScalar(deltaTime));
+
+            const deltaRotationQuaternion = new THREE.Quaternion().setFromEuler(new THREE.Euler(
+                aircraftState.pitchSpeed * deltaTime,
+                aircraftState.yawSpeed * deltaTime,
+                aircraftState.rollSpeed * deltaTime,
+                'YXZ'
+            ));
+            aircraft.quaternion.multiplyQuaternions(aircraft.quaternion, deltaRotationQuaternion);
+
+            aircraftState.position.add(aircraftState.velocity.clone().multiplyScalar(deltaTime));
+            aircraft.position.copy(aircraftState.position);
+
+            aircraft.updateMatrixWorld();
+            playerBoundingSphere.center.copy(aircraft.position);
 
             // --- Update Space Objects (Asteroids, TIEs) ---
-            const tempVec = new THREE.Vector3(); // General purpose temporary vector
-            const tempVec2 = new THREE.Vector3(); // Another temporary vector, e.g., for separation
+            const tempVec = new THREE.Vector3();
+            const tempVec2 = new THREE.Vector3();
             const tempQuat = new THREE.Quaternion();
 
             spaceObjects.forEach((obj, index) => {
@@ -593,48 +535,40 @@ playerBoundingSphere.center.copy(aircraft.position);
                 else if (obj.userData.type === 'tieFighter') {
                     if (obj.userData.hp <= 0) return;
 
-                    // DEBUG LOG: TIE state periodically
-                     if (currentTime % 1 < deltaTime) { // Log roughly once per second
-                        console.log(`DEBUG LOG: TIE ${index} State: ${obj.userData.state}, Speed: ${obj.userData.speed.toFixed(1)}, Position: ${obj.position.x.toFixed(0)}, ${obj.position.y.toFixed(0)}, ${obj.position.z.toFixed(0)}, Velocity: ${obj.userData.velocity.length().toFixed(1)}`);
-                     }
-
                     const currentTarget = obj.userData.targetPosition;
                     const distPlayerToDestroyerSq = aircraft.position.distanceToSquared(starDestroyer.position);
 
-                    // State Transitions (Defend Destroyer)
                     if (obj.userData.state === 'patrolling' && distPlayerToDestroyerSq < DESTROYER_DEFENSE_RADIUS ** 2) {
                         obj.userData.state = 'attacking';
-                        obj.userData.targetPosition = null; // Clear old target
+                        obj.userData.targetPosition = null;
                     } else if (obj.userData.state === 'attacking' && distPlayerToDestroyerSq > (DESTROYER_DEFENSE_RADIUS * 1.3) ** 2) {
                         obj.userData.state = 'patrolling';
-                        obj.userData.targetPosition = null; // Clear old target
+                        obj.userData.targetPosition = null;
                     }
 
                     let desiredDirection = new THREE.Vector3();
-                    let targetPoint = new THREE.Vector3(); // Point the TIE wants to fly towards
+                    let targetPoint = new THREE.Vector3();
 
                     if (obj.userData.state === 'attacking') {
-                        // --- Attacking Player (with Offset) ---
                         targetPoint.copy(aircraft.position).add(obj.userData.targetOffset);
-                        desiredDirection.subVectors(targetPoint, obj.position); // Vector towards offset target point
+                        desiredDirection.subVectors(targetPoint, obj.position);
 
-                        const distToActualPlayerSq = obj.position.distanceToSquared(aircraft.position); // Use actual distance for range check
+                        const distToActualPlayerSq = obj.position.distanceToSquared(aircraft.position);
 
-                        // Firing Check (Uses TIE_HIT_CHANCE constant = 1.0)
                         if (distToActualPlayerSq < TIE_CANNON_RANGE ** 2 && currentTime - obj.userData.lastShotTime > TIE_FIRE_RATE) {
                             const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(obj.quaternion);
-                            const dotToTarget = forward.dot(desiredDirection.clone().normalize()); // Ensure normalized for dot check - cloned to not affect desiredDirection
+                            const dotToTarget = forward.dot(desiredDirection.clone().normalize());
 
                             if (dotToTarget > TIE_AIM_TOLERANCE) {
                                 obj.userData.lastShotTime = currentTime;
                                 const bulletGeo = new THREE.SphereGeometry(0.4, 6, 6);
                                 const bulletMat = new THREE.MeshBasicMaterial({ color: 0xff0000 });
                                 const bullet = new THREE.Mesh(bulletGeo, bulletMat);
-                                const bulletStartOffset = forward.clone().multiplyScalar(3); // Start bullet slightly in front
+                                const bulletStartOffset = forward.clone().multiplyScalar(3);
                                 bullet.position.copy(obj.position).add(bulletStartOffset);
                                 bullet.userData = {
                                     type: 'enemyBullet',
-                                    velocity: forward.clone().multiplyScalar(TIE_BULLET_SPEED), // Fire straight from TIE nose - clone forward vector
+                                    velocity: forward.clone().multiplyScalar(TIE_BULLET_SPEED),
                                     lifetime: ENEMY_BULLET_LIFETIME * 0.8,
                                     boundingBox: new THREE.Box3(),
                                     accuracy: TIE_HIT_CHANCE
@@ -646,33 +580,29 @@ playerBoundingSphere.center.copy(aircraft.position);
                         }
                         desiredDirection.normalize();
 
-
-                    } else { // Patrolling
-                        // --- Patrolling ---
-                        // If no target or reached current target, pick a new one
-                        if (!currentTarget || obj.position.distanceToSquared(currentTarget) < 100**2) {
+                    } else {
+                         if (!currentTarget || obj.position.distanceToSquared(currentTarget) < 100**2) {
                             const angle = Math.random() * Math.PI * 2;
                             const radius = Math.random() * TIE_PATROL_RADIUS;
                              targetPoint.set(
                                 obj.userData.patrolCenter.x + Math.cos(angle) * radius,
-                                obj.userData.patrolCenter.y + (Math.random() - 0.5) * 100, // Add some vertical variation
+                                obj.userData.patrolCenter.y + (Math.random() - 0.5) * 100,
                                 obj.userData.patrolCenter.z + Math.sin(angle) * radius
                             );
-                            obj.userData.targetPosition = targetPoint.clone(); // Store the new target
+                            obj.userData.targetPosition = targetPoint.clone();
                         } else {
-                            targetPoint.copy(currentTarget); // Use existing patrol target
+                            targetPoint.copy(currentTarget);
                         }
                         desiredDirection.subVectors(targetPoint, obj.position).normalize();
                     }
 
 
-                    // --- Separation from other TIEs ---
                     let separationVector = tempVec2.set(0, 0, 0);
                     let nearbyTies = 0;
                     spaceObjects.forEach(otherObj => {
                         if (otherObj !== obj && otherObj.userData.type === 'tieFighter' && otherObj.userData.hp > 0) {
                             const distSq = obj.position.distanceToSquared(otherObj.position);
-                            if (distSq < TIE_SEPARATION_DISTANCE ** 2 && distSq > 0.01) { // Avoid division by zero
+                            if (distSq < TIE_SEPARATION_DISTANCE ** 2 && distSq > 0.01) {
                                 const awayVector = tempVec.subVectors(obj.position, otherObj.position).normalize();
                                 separationVector.add(awayVector);
                                 nearbyTies++;
@@ -681,51 +611,40 @@ playerBoundingSphere.center.copy(aircraft.position);
                     });
 
                     if (nearbyTies > 0) {
-                         // Average the separation vectors and apply a weighted force
                         separationVector.divideScalar(nearbyTies).normalize();
-                        // Combine desired direction (patrol/attack) with separation
                         desiredDirection.lerp(separationVector, TIE_SEPARATION_FORCE).normalize();
                     }
 
 
-                    // --- Steering & Movement ---
-                    // Get current forward direction
                     const forward = new THREE.Vector3(0, 0, -1).applyQuaternion(obj.quaternion);
-
-                    // Calculate the angle and axis needed to turn towards the desired direction
                     const rotationAngle = forward.angleTo(desiredDirection);
 
-                    if (rotationAngle > 0.01) { // Only turn if needed
+                    if (rotationAngle > 0.01) {
                         const maxTurn = TIE_TURN_RATE * deltaTime;
                         const turnAngle = Math.min(rotationAngle, maxTurn);
 
                         const axis = tempVec.crossVectors(forward, desiredDirection).normalize();
                         tempQuat.setFromAxisAngle(axis, turnAngle);
 
-                        // Apply the rotation
                         obj.quaternion.multiplyQuaternions(tempQuat, obj.quaternion);
                     }
 
+                    const finalForward = forward.set(0, 0, -1).applyQuaternion(obj.quaternion);
+                    obj.userData.velocity.copy(finalForward).multiplyScalar(obj.userData.speed);
 
-                    // Apply movement using the TIE's unique speed in its current forward direction
-                    const finalForward = forward.set(0, 0, -1).applyQuaternion(obj.quaternion); // Recalculate forward after rotation
-                    obj.userData.velocity.copy(finalForward).multiplyScalar(obj.userData.speed); // Use unique speed
-
-                    // Update position
                     obj.position.addScaledVector(obj.userData.velocity, deltaTime);
 
-                    // Update bounding sphere center for collision
                     obj.userData.boundingSphere.center.copy(obj.position);
 
-                    obj.updateMatrixWorld(); // Update world matrix for correct positioning
+                    obj.updateMatrixWorld();
                 }
                 else if (obj.userData.type === 'destroyer') {
-                    obj.updateMatrixWorld(true); // Ensure world matrix is updated for cannons/collisions
+                    obj.updateMatrixWorld(true);
                 }
             });
 
             // --- Update Bullets and Collisions ---
-            updatePlayerBulletsAndCollisions(deltaTime, currentTime); // Pass currentTime for explosions
+            updatePlayerBulletsAndCollisions(deltaTime, currentTime);
             updateEnemyBulletsAndCollisions(deltaTime);
 
             // --- Update Destroyer Cannons (Firing logic) ---
@@ -738,141 +657,108 @@ playerBoundingSphere.center.copy(aircraft.position);
             checkWinLoseCondition();
 
             // --- Update Camera ---
-            // Camera follows the aircraft with a slight delay (lerp)
-            const cameraOffset = new THREE.Vector3(0, 5, 20); // Offset behind and slightly above
+            const cameraOffset = new THREE.Vector3(0, 5, 20);
             const cameraPosition = cameraOffset.clone().applyQuaternion(aircraft.quaternion).add(aircraft.position);
-            const lookAtOffset = new THREE.Vector3(0, 1, -50); // Look slightly ahead
+            const lookAtOffset = new THREE.Vector3(0, 1, -50);
             const lookAtPosition = lookAtOffset.clone().applyQuaternion(aircraft.quaternion).add(aircraft.position);
 
-            camera.position.lerp(cameraPosition, 0.08); // Smooth camera movement
+            camera.position.lerp(cameraPosition, 0.08);
             camera.lookAt(lookAtPosition);
         }
 
-
-        // --- Player Bullet Collision and Update ---
         function updatePlayerBulletsAndCollisions(deltaTime, currentTime) {
             const bulletsToRemove = new Set();
-            const objectsToRemove = []; // To store objects (like TIEs) that are destroyed
-            const cannonsToRemoveFromDestroyer = []; // To store specific cannon indices to remove
+            const objectsToRemove = [];
+            const cannonsToRemoveFromDestroyer = [];
 
             for (let i = playerBullets.length - 1; i >= 0; i--) {
                 const bullet = playerBullets[i];
-                 // Update lifetime and remove if expired
                 bullet.userData.lifetime -= deltaTime;
                 if (bullet.userData.lifetime <= 0) {
                     bulletsToRemove.add(i);
                     continue;
                 }
 
-                // Update bullet position
                 bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
-                // Update bounding box for collision checking
                 bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(0.6, 0.6, 0.6));
 
-
                 let hit = false;
-                 // Check collisions with space objects (asteroids, destroyer, TIEs)
                 for (let j = spaceObjects.length - 1; j >= 0; j--) {
                     const obj = spaceObjects[j];
-                    // Skip if object doesn't exist, isn't destructible, or is already destroyed
                     if (!obj || !obj.userData || !obj.userData.isDestructible || obj.userData.hp <= 0) continue;
 
                     if (obj.userData.type === 'asteroid') {
-                        // Simple bounding box collision for asteroids
                         if (obj.userData.boundingBox && bullet.userData.boundingBox.intersectsBox(obj.userData.boundingBox)) {
-                            bulletsToRemove.add(i);
-                            hit = true;
-                            break; // Bullet hit something, stop checking other objects for this bullet
+                            bulletsToRemove.add(i); hit = true; break;
                         }
                     } else if (obj.userData.type === 'destroyer') {
-                         // Broad phase check against destroyer's main bounding box first
-                         // Using a slightly larger sphere for a more forgiving broad phase
-                        if (obj.userData.boundingBox && obj.userData.boundingBox.intersectsSphere(new THREE.Sphere(bullet.position, 10))) {
-                             // Narrow phase: check against each cannon
+                         if (obj.userData.boundingBox && obj.userData.boundingBox.intersectsSphere(new THREE.Sphere(bullet.position, 10))) {
                             let hitCannon = false;
                             for(let c = obj.userData.cannons.length - 1; c >= 0; c--) {
                                 const cannon = obj.userData.cannons[c];
-                                if(cannon.userData.hp <= 0) continue; // Skip destroyed cannons
+                                if(cannon.userData.hp <= 0) continue;
                                 const cannonWorldBB = cannon.userData.boundingBox.clone().applyMatrix4(cannon.matrixWorld);
                                 if (bullet.userData.boundingBox.intersectsBox(cannonWorldBB)) {
-                                    cannon.userData.hp--;
-                                    bulletsToRemove.add(i); // Bullet is destroyed
-                                    hit = true;
-                                    hitCannon = true;
+                                    cannon.userData.hp--; bulletsToRemove.add(i); hit = true; hitCannon = true;
                                     if (cannon.userData.hp <= 0) {
-                                        cannon.visible = false; // Hide the destroyed cannon model
-                                        cannonsToRemoveFromDestroyer.push({ cannonIndex: c, destroyer: obj }); // Mark for removal from array
-                                        createExplosion(cannonWorldBB.getCenter(new THREE.Vector3()), currentTime); // Create explosion at cannon location
+                                        cannon.visible = false;
+                                        cannonsToRemoveFromDestroyer.push({ cannonIndex: c, destroyer: obj });
+                                        createExplosion(cannonWorldBB.getCenter(new THREE.Vector3()), currentTime);
                                     }
-                                    break; // Bullet hit a cannon, no need to check other cannons
+                                    break;
                                 }
                             }
 
-                            if (!hitCannon && obj.userData.boundingBox.intersectsBox(bullet.userData.boundingBox)) { // Hull hit if no cannon was hit
-                                obj.userData.destroyerHits++;
-                                bulletsToRemove.add(i); // Bullet is destroyed
-                                hit = true;
+                            if (!hitCannon && obj.userData.boundingBox.intersectsBox(bullet.userData.boundingBox)) {
+                                obj.userData.destroyerHits++; bulletsToRemove.add(i); hit = true;
                             }
 
-                            if(hit) break; // Bullet hit the destroyer (cannon or hull), stop checking other objects
+                            if(hit) break;
                         }
                     } else if (obj.userData.type === 'tieFighter') {
-                         // Bounding sphere collision for TIE Fighters
-                        if (obj.userData.boundingSphere && bullet.userData.boundingBox.intersectsSphere(obj.userData.boundingSphere)) {
+                         if (obj.userData.boundingSphere && bullet.userData.boundingBox.intersectsSphere(obj.userData.boundingSphere)) {
                             obj.userData.hp--;
-                            bulletsToRemove.add(i); // Bullet is destroyed
+                            bulletsToRemove.add(i);
                             hit = true;
-                            console.log(`TIE Hit! HP: ${obj.userData.hp}`);
                             if (obj.userData.hp <= 0) {
-                                console.log("TIE Destroyed!");
-                                createExplosion(obj.position, currentTime); // Create explosion at TIE location
-                                objectsToRemove.push({ index: j, object: obj }); // Mark TIE for removal
+                                createExplosion(obj.position, currentTime);
+                                objectsToRemove.push({ index: j, object: obj });
                             }
-                            break; // Bullet hit a TIE, stop checking other objects
+                            break;
                         }
                     }
-                } // End object loop
-            } // End bullet loop
+                }
+            }
 
-            // Clean up destroyed cannons from the destroyer's list
             cannonsToRemoveFromDestroyer.forEach(item => {
-                 // Double check index validity before splicing
                  if(item.destroyer.userData.cannons[item.cannonIndex] && item.destroyer.userData.cannons[item.cannonIndex].userData.hp <= 0) {
-                    // Ensure the cannon object is actually removed from the group to stop rendering
                     const cannonToRemove = item.destroyer.userData.cannons[item.cannonIndex];
                     item.destroyer.remove(cannonToRemove);
                     item.destroyer.userData.cannons.splice(item.cannonIndex, 1);
                  }
             });
 
-
-            // Remove destroyed objects (TIEs, potentially others later) from the main spaceObjects list and scene
-            // Process in reverse order to avoid index issues after splicing
             const sortedObjectIndices = objectsToRemove.sort((a, b) => b.index - a.index);
             sortedObjectIndices.forEach(item => {
-                 // Double check index validity before splicing
                 if (item.index < spaceObjects.length && spaceObjects[item.index] === item.object) {
-                    scene.remove(item.object); // Remove from scene
-                    // Dispose geometry/material if needed for complex objects - TIE is simple so maybe not critical
-                    spaceObjects.splice(item.index, 1); // Remove from tracking list
+                    scene.remove(item.object);
+                    if (item.object.geometry) item.object.geometry.dispose();
+                    if (item.object.material) item.object.material.dispose();
+                    spaceObjects.splice(item.index, 1);
                 }
             });
 
-            // Remove used bullets (hit something or lifetime expired)
-            // Process in reverse order to avoid index issues after splicing
             const sortedBulletIndices = [...bulletsToRemove].sort((a, b) => b - a);
             sortedBulletIndices.forEach(index => {
                 if (index < playerBullets.length) {
                     const bullet = playerBullets[index];
-                    scene.remove(bullet); // Remove from scene
-                    // Dispose geometry and material to free up memory
+                    scene.remove(bullet);
                     if (bullet.geometry) bullet.geometry.dispose();
                     if (bullet.material) bullet.material.dispose();
-                    playerBullets.splice(index, 1); // Remove from tracking list
+                    playerBullets.splice(index, 1);
                 }
             });
         }
-
 
         function updateEnemyBulletsAndCollisions(deltaTime) {
             const bulletsToRemove = new Set();
@@ -883,40 +769,32 @@ playerBoundingSphere.center.copy(aircraft.position);
                     continue;
                 }
 
-                 // Update lifetime and remove if expired or out of bounds
                 bullet.userData.lifetime -= deltaTime;
                 if (bullet.userData.lifetime <= 0 || bullet.position.lengthSq() > SPACE_EXTENT**2 * 1.5 ) {
                     bulletsToRemove.add(i);
                     continue;
                 }
 
-                // Update bullet position
                 bullet.position.add(bullet.userData.velocity.clone().multiplyScalar(deltaTime));
-                 // Update bounding box for collision checking
                 bullet.userData.boundingBox.setFromCenterAndSize(bullet.position, new THREE.Vector3(1, 1, 1));
 
-                // Check collision with player aircraft (using bounding sphere)
                 if (bullet.userData.boundingBox.intersectsSphere(playerBoundingSphere)) {
-                    bulletsToRemove.add(i); // Bullet is destroyed on hit
-                    // Apply damage based on accuracy
-                    const hitChance = bullet.userData.accuracy || 0.01; // Default accuracy if not set
+                    bulletsToRemove.add(i);
+                    const hitChance = bullet.userData.accuracy || 0.01;
                     if (Math.random() < hitChance) {
                         playerState.hp--;
                         updateHPDisplay();
-                        console.log(`Player Hit! HP: ${playerState.hp}, Hit Chance: ${hitChance}`);
                     }
                 }
             }
 
-            // Remove used bullets
             const sortedBulletIndices = [...bulletsToRemove].sort((a, b) => b - a);
             sortedBulletIndices.forEach(index => {
                 if (index < enemyBullets.length) {
                     const bullet = enemyBullets[index];
                     scene.remove(bullet);
-                    // Dispose geometry and material
-                    if (bullet.geometry) bullet.geometry.dispose();
-                    if (bullet.material) bullet.material.dispose();
+                     if (bullet.geometry) bullet.geometry.dispose();
+                     if (bullet.material) bullet.material.dispose();
                     enemyBullets.splice(index, 1);
                 }
             });
@@ -930,7 +808,6 @@ playerBoundingSphere.center.copy(aircraft.position);
                 gameOverDisplayElement.textContent = "YOU HAVE BEEN DESTROYED!";
                 gameOverDisplayElement.style.color = "red";
                 gameOverDisplayElement.style.display = 'block';
-                 // Stop player movement
                 aircraftState.velocity.set(0,0,0);
                 aircraftState.pitchSpeed = 0;
                 aircraftState.yawSpeed = 0;
@@ -938,7 +815,6 @@ playerBoundingSphere.center.copy(aircraft.position);
                 return;
             }
 
-            // Check if Star Destroyer is defeated (all cannons destroyed or sufficient hull hits)
             const allDestroyerCannonsDestroyed = starDestroyer && starDestroyer.userData.cannons.every(cannon => cannon.userData.hp <= 0);
 
             if (starDestroyer && (starDestroyer.userData.destroyerHits >= DESTROYER_WIN_HITS || allDestroyerCannonsDestroyed)) {
@@ -946,7 +822,6 @@ playerBoundingSphere.center.copy(aircraft.position);
                 gameOverDisplayElement.textContent = `DESTROYER DISABLED! (${starDestroyer.userData.destroyerHits} Hits)`;
                 gameOverDisplayElement.style.color = "lime";
                 gameOverDisplayElement.style.display = 'block';
-                // Clear enemy bullets
                 enemyBullets.forEach(b => scene.remove(b));
                 enemyBullets = [];
             }
@@ -954,7 +829,7 @@ playerBoundingSphere.center.copy(aircraft.position);
 
         function animate() {
             requestAnimationFrame(animate);
-            const deltaTime = Math.min(clock.getDelta(), 0.05); // Cap delta time to prevent physics glitches on slow frames
+            const deltaTime = Math.min(clock.getDelta(), 0.05);
             const currentTime = clock.elapsedTime;
             update(deltaTime, currentTime);
             renderer.render(scene, camera);
