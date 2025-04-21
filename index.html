@@ -152,7 +152,6 @@
             opacity: 1.0,
         });
 
-        // Keep track of pressed keys for keyboard input
         const pressedKeys = {};
 
         init();
@@ -330,7 +329,6 @@
             const touch = event.changedTouches[0];
             if(!touch) return;
             uiState.fireButtonPressed = true;
-            uiState.fireButtonIdentifier = touch.identifier;
             fireRequested = true;
             fireButtonElement.style.backgroundColor = '#800';
         }
@@ -429,11 +427,9 @@
 
             timeSinceLastShot += deltaTime;
 
-            // Handle firing input
             if (fireRequested && uiState.fireButtonPressed && timeSinceLastShot >= PLAYER_FIRE_RATE) {
                 fireCannon();
             }
-
 
             // --- Player Aircraft Update ---
             const targetFov = aircraftState.isWarping ? WARP_FOV : NORMAL_FOV;
@@ -460,39 +456,31 @@
             let currentRollSpeed = 0;
 
             if (uiState.joystickActive) {
-                // Use joystick input for pitch and yaw if active
                 currentPitchSpeed = aircraftState.pitchSpeed;
                 currentYawSpeed = aircraftState.yawSpeed;
             } else {
-                // Use keyboard input for pitch and yaw if joystick is not active
                 if (pressedKeys['ArrowUp']) currentPitchSpeed = -aircraftState.maxPitchSpeed;
                 if (pressedKeys['ArrowDown']) currentPitchSpeed = aircraftState.maxPitchSpeed;
                 if (pressedKeys['ArrowLeft']) currentYawSpeed = aircraftState.maxYawSpeed;
                 if (pressedKeys['ArrowRight']) currentYawSpeed = -aircraftState.maxYawSpeed;
             }
 
-            // Roll is always keyboard controlled in this setup
             if (pressedKeys['q']) currentRollSpeed = aircraftState.maxRollSpeed;
             if (pressedKeys['e']) currentRollSpeed = -aircraftState.maxRollSpeed;
 
-            // Apply damping to the speeds if no input is active for that axis
             if (!uiState.joystickActive && !pressedKeys['ArrowUp'] && !pressedKeys['ArrowDown']) currentPitchSpeed *= aircraftState.controlDamping;
             if (!uiState.joystickActive && !pressedKeys['ArrowLeft'] && !pressedKeys['ArrowRight']) currentYawSpeed *= aircraftState.controlDamping;
             if (!pressedKeys['q'] && !pressedKeys['e']) currentRollSpeed *= aircraftState.controlDamping;
 
-
-            // Zero out very small speeds after damping
             if (Math.abs(currentPitchSpeed) < 0.005) currentPitchSpeed = 0;
             if (Math.abs(currentYawSpeed) < 0.005) currentYawSpeed = 0;
             if (Math.abs(currentRollSpeed) < 0.005) currentRollSpeed = 0;
 
-            // Apply the calculated speeds
             aircraftState.pitchSpeed = currentPitchSpeed;
             aircraftState.yawSpeed = currentYawSpeed;
             aircraftState.rollSpeed = currentRollSpeed;
 
             // === END Input Handling ===
-
 
             const forwardVector = new THREE.Vector3(0,0,-1).applyQuaternion(aircraft.quaternion);
             const thrustForce = forwardVector.clone().multiplyScalar(currentThrust);
